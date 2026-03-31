@@ -630,7 +630,7 @@ function deleteCourse(id){if(window.confirm("Delete this course and all its assi
                         </div>
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:7}}>
-                        <<button onClick={()=>{setShowFlashModal(a.id);setView("flashcards");}} style={{background:"transparent",border:`1px solid ${hasCards?"#a78bfa":T.border2}`,borderRadius:6,padding:"3px 8px",fontSize:11,color:hasCards?"#a78bfa":T.muted}}>{hasCards?"⬡ Cards":"⬡ Gen"}</button>
+                        <<button onClick={()=>{setShowFlashModal(a.id);setView("flashcards");}} style={{background:"transparent",border:`1px solid ${hasCards?"#a78bfa":T.border2}`,borderRadius:6,padding:"3px 8px",fontSize:11,color:hasCards?"#a78bfa":T.muted}}>{hasCards?"⬡ Cards":"⬡ Gen"}</button> <button onClick={()=>deleteAssignment(a.id)} style={{background:"transparent",border:`1px solid ${T.border2}`,borderRadius:6,padding:"3px 8px",fontSize:11,color:T.danger}} title="Delete assignment">🗑</button>
 <button onClick={()=>deleteAssignment(a.id)} style={{background:"transparent",border:`1px solid ${T.border2}`,borderRadius:6,padding:"3px 8px",fontSize:11,color:T.danger}} title="Delete assignment">🗑</button>
                         <div style={{textAlign:"right"}}><div style={{fontSize:11,fontWeight:700,color:a.done?T.faint:urgencyColor(days,T)}}>{a.done?"Done":days<0?"Overdue":days===0?"Today!":`${days}d`}</div><div style={{fontSize:10,color:T.faint}}>{a.due}</div></div>
                       </div>
