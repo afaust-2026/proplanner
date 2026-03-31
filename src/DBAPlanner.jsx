@@ -1,4 +1,13 @@
 import { useState, useEffect, useRef } from "react";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL || "",
+  import.meta.env.VITE_SUPABASE_ANON || ""
+);
+const ANTH_KEY = import.meta.env.VITE_ANTHROPIC_KEY || "";
+
+// (imports above)
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const DAYS_FULL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
@@ -16,7 +25,7 @@ function lighten(hex,amt){let r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice
 
 // ─── University Registry ──────────────────────────────────────────────────────
 const UNIVERSITIES = [
-  {id:"utd",  name:"UT Dallas",             abbr:"UTD",  primary:"#C75B12", secondary:"#154734", accent:"#F5A623", logo:"☄️"},
+  {id:"utd",  name:"UT Dallas",             abbr:"UTD",  primary:"#C75B12", secondary:"#154734", accent:"#F5A623", logo:"🔱"},
   {id:"harvard",name:"Harvard University",  abbr:"HBS",  primary:"#A51C30", secondary:"#1E1E1E", accent:"#C0A060", logo:"🎓"},
   {id:"wharton",name:"Wharton / UPenn",     abbr:"PENN", primary:"#011F5B", secondary:"#990000", accent:"#C0A060", logo:"🦅"},
   {id:"mit",  name:"MIT Sloan",             abbr:"MIT",  primary:"#750014", secondary:"#8A8B8C", accent:"#A31F34", logo:"⚙️"},
@@ -35,13 +44,13 @@ const UNIVERSITIES = [
 
 // ─── Claude API ───────────────────────────────────────────────────────────────
 async function callClaudeJSON(system,user,maxT=1500){
-  const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:maxT,system,messages:[{role:"user",content:user}]})});
+  const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":ANTH_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:maxT,system,messages:[{role:"user",content:user}]})});
   const data=await res.json();
   const text=data.content?.map(b=>b.text||"").join("")||"";
   return JSON.parse(text.replace(/```json[\s\S]*?```|```/g,"").trim());
 }
 async function callClaudeChat(messages){
-  const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages})});
+  const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":ANTH_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages})});
   const data=await res.json();
   return data.content?.map(b=>b.text||"").join("")||"Sorry, I couldn't respond.";
 }
@@ -299,8 +308,6 @@ Be concise, encouraging, and doctoral-level. Reference actual assignments/milest
   function addCourse(){if(!newCourse.name)return notify("Enter a course name.");setCourses(p=>[...p,{...newCourse,id:Date.now(),rmpData:null}]);setShowAddCourse(false);setNewCourse({name:"",difficulty:3,color:"#6366f1",professor:""});notify("Course added!");}
   function addMilestone(){if(!newMilestone.title||!newMilestone.due)return notify("Fill title and date.");setMilestones(p=>[...p,{...newMilestone,id:Date.now(),done:false}]);setShowAddMilestone(false);setNewMilestone({title:"",due:"",notes:""});notify("Milestone added!");}
   function toggleDone(id){setAssignments(p=>p.map(a=>a.id===id?{...a,done:!a.done}:a));}
-  function deleteAssignment(id){if(window.confirm("Delete this assignment?"))setAssignments(p=>p.filter(a=>a.id!==id));}
-  function deleteCourse(id){if(window.confirm("Delete this course and all its assignments?")){{setCourses(p=>p.filter(c=>c.id!==id));setAssignments(p=>p.filter(a=>a.courseId!==id));}}}
   function toggleMilestoneDone(id){setMilestones(p=>p.map(m=>m.id===id?{...m,done:!m.done}:m));}
 
   const upcoming=assignments.filter(a=>!a.done).sort((a,b)=>new Date(a.due)-new Date(b.due)).slice(0,5);
@@ -630,8 +637,7 @@ Be concise, encouraging, and doctoral-level. Reference actual assignments/milest
                         </div>
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:7}}>
-                        <<button onClick={()=>{setShowFlashModal(a.id);setView("flashcards");}} style={{background:"transparent",border:`1px solid ${hasCards?"#a78bfa":T.border2}`,borderRadius:6,padding:"3px 8px",fontSize:11,color:hasCards?"#a78bfa":T.muted}}>{hasCards?"⬡ Cards":"⬡ Gen"}</button> <button onClick={()=>deleteAssignment(a.id)} style={{background:"transparent",border:`1px solid ${T.border2}`,borderRadius:6,padding:"3px 8px",fontSize:11,color:T.danger}} title="Delete assignment">🗑</button>
-<button onClick={()=>deleteAssignment(a.id)} style={{background:"transparent",border:`1px solid ${T.border2}`,borderRadius:6,padding:"3px 8px",fontSize:11,color:T.danger}} title="Delete assignment">🗑</button>
+                        <button onClick={()=>{setShowFlashModal(a.id);setView("flashcards");}} style={{background:"transparent",border:`1px solid ${hasCards?"#a78bfa":T.border2}`,borderRadius:6,padding:"3px 8px",fontSize:11,color:hasCards?"#a78bfa":T.muted}}>{hasCards?"⬡ Cards":"⬡ Gen"}</button>
                         <div style={{textAlign:"right"}}><div style={{fontSize:11,fontWeight:700,color:a.done?T.faint:urgencyColor(days,T)}}>{a.done?"Done":days<0?"Overdue":days===0?"Today!":`${days}d`}</div><div style={{fontSize:10,color:T.faint}}>{a.due}</div></div>
                       </div>
                     </div>);
