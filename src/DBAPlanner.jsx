@@ -16,7 +16,7 @@ function lighten(hex,amt){let r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice
 
 // ─── University Registry ──────────────────────────────────────────────────────
 const UNIVERSITIES = [
-  {id:"utd",  name:"UT Dallas",             abbr:"UTD",  primary:"#C75B12", secondary:"#154734", accent:"#F5A623", logo:"🔱"},
+  {id:"utd",  name:"UT Dallas",             abbr:"UTD",  primary:"#C75B12", secondary:"#154734", accent:"#F5A623", logo:"☄️"},
   {id:"harvard",name:"Harvard University",  abbr:"HBS",  primary:"#A51C30", secondary:"#1E1E1E", accent:"#C0A060", logo:"🎓"},
   {id:"wharton",name:"Wharton / UPenn",     abbr:"PENN", primary:"#011F5B", secondary:"#990000", accent:"#C0A060", logo:"🦅"},
   {id:"mit",  name:"MIT Sloan",             abbr:"MIT",  primary:"#750014", secondary:"#8A8B8C", accent:"#A31F34", logo:"⚙️"},
