@@ -264,7 +264,7 @@ export default function ProPlanner(){
 
   // UI state
   const[view,setView]=useState("dashboard");
-  const[dark,setDark]=useState(true);
+  const[dark,setDark]=useState(()=>window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);
   const[sidebarOpen,setSidebar]=useState(true);
   const[chatOpen,setChatOpen]=useState(false);
 
@@ -512,7 +512,7 @@ export default function ProPlanner(){
           method:"POST",
           headers:{"Content-Type":"application/json","x-api-key":ANTH_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
           body:JSON.stringify({
-            model:"claude-sonnet-4-20250514",max_tokens:1500,
+            model:"claude-sonnet-4-20250514",max_tokens:2000,
             messages:[{role:"user",content:[
               {type:"document",source:{type:"base64",media_type:"application/pdf",data:base64}},
               {type:"text",text:`Parse this academic syllabus PDF. Return ONLY valid JSON with no markdown or extra text: {"courseName":"","professorName":"","difficulty":1-5,"assignments":[{"title":"","due":"YYYY-MM-DD","type":"paper|exam|case|homework|project|discussion","estHours":1,"topics":""}]}. Assume year ${new Date().getFullYear()} when no year is given. Return ONLY the JSON object.`}
@@ -717,7 +717,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
             <div style={{fontSize:10,color:T.muted}}>{daysUntil(nextMilestone.due)}d away</div>
           </div>}
           <div style={{padding:"8px 6px",borderTop:`1px solid ${T.border}`,display:"flex",flexDirection:"column",gap:4}}>
-            <button onClick={()=>setDark(d=>!d)} className="nb" style={{justifyContent:sidebarOpen?"flex-start":"center",color:T.muted,border:`1px solid ${T.border2}`,borderRadius:8,padding:"6px 9px"}}>
+            <button onClick={async()=>{const nd=!dark;setDark(nd);await supabase.from("profiles").update({dark_mode:nd}).eq("id",authUser.id);}} className="nb" style={{justifyContent:sidebarOpen?"flex-start":"center",color:T.muted,border:`1px solid ${T.border2}`,borderRadius:8,padding:"6px 9px"}}>
               <span style={{fontSize:14}}>{dark?"☀️":"🌙"}</span>
               {sidebarOpen&&<span style={{fontSize:12,whiteSpace:"nowrap"}}>{dark?"Light Mode":"Dark Mode"}</span>}
             </button>
@@ -969,7 +969,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                             ))}
                           </div>
                         )}
-                        {rmpResults[c.id]==="notfound"&&<div style={{marginTop:4,fontSize:11,color:T.warning,padding:"4px 8px",background:"rgba(245,158,11,.08)",borderRadius:6}}>No results. Try the direct link above.</div>}
+                        {rmpResults[c.id]==="notfound"&&<div style={{marginTop:4,fontSize:11,color:T.warning,padding:"4px 8px",background:"rgba(245,158,11,.08)",borderRadius:6}}>Search blocked by browser security. Use the direct link above to find your professor, then manually enter their difficulty rating below.</div>}
                       </div>
                     )}
                     <div className="prog-bar" style={{marginBottom:5}}><div className="prog-fill" style={{width:`${pct}%`,background:c.color}}/></div>
@@ -1227,7 +1227,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                   <div style={{fontWeight:700,marginBottom:10}}>Appearance</div>
                   <div style={{display:"flex",gap:9,marginBottom:14}}>
                     {[{id:true,icon:"🌙",label:"Dark"},{id:false,icon:"☀️",label:"Light"}].map(opt=>(
-                      <div key={String(opt.id)} onClick={()=>setDark(opt.id)} style={{flex:1,padding:12,borderRadius:9,cursor:"pointer",border:`2px solid ${dark===opt.id?T.accent:T.border2}`,background:dark===opt.id?`rgba(${rgb},.1)`:"transparent",textAlign:"center",transition:"all .2s"}}>
+                      <div key={String(opt.id)} onClick={async()=>{setDark(opt.id);await supabase.from("profiles").update({dark_mode:opt.id}).eq("id",authUser.id);}} style={{flex:1,padding:12,borderRadius:9,cursor:"pointer",border:`2px solid ${dark===opt.id?T.accent:T.border2}`,background:dark===opt.id?`rgba(${rgb},.1)`:"transparent",textAlign:"center",transition:"all .2s"}}>
                         <div style={{fontSize:20,marginBottom:4}}>{opt.icon}</div><div style={{fontWeight:600,fontSize:12}}>{opt.label}</div>
                       </div>
                     ))}
