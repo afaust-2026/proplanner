@@ -496,9 +496,40 @@ export default function ProPlanner(){
   async function handleSyllabusUpload(e){
     const file=e.target.files[0];if(!file)return;
     setUploading(true);setUploadMsg("Reading...");
-    const text=await file.text();setUploadMsg("Analyzing with AI...");
+    const isPDF=file.type==="application/pdf"||file.name.toLowerCase().endsWith(".pdf");
+    let result;
     try{
-      const result=await callClaudeJSON(`Parse academic syllabus. Return ONLY valid JSON: {"courseName":"","professorName":"","difficulty":1-5,"assignments":[{"title":"","due":"YYYY-MM-DD","type":"paper|exam|case|homework|project|discussion","estHours":1,"topics":""}]}. Assume year ${new Date().getFullYear()}.`,text.slice(0,3500));
+      setUploadMsg("Analyzing with AI...");
+      if(isPDF){
+        // Send PDF directly to Claude as base64 — Claude reads PDFs natively
+        const base64=await new Promise((res,rej)=>{
+          const r=new FileReader();
+          r.onload=()=>res(r.result.split(",")[1]);
+          r.onerror=()=>rej(new Error("Read failed"));
+          r.readAsDataURL(file);
+        });
+        const resp=await fetch("https://api.anthropic.com/v1/messages",{
+          method:"POST",
+          headers:{"Content-Type":"application/json","x-api-key":ANTH_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+          body:JSON.stringify({
+            model:"claude-sonnet-4-20250514",max_tokens:1500,
+            messages:[{role:"user",content:[
+              {type:"document",source:{type:"base64",media_type:"application/pdf",data:base64}},
+              {type:"text",text:`Parse this academic syllabus PDF. Return ONLY valid JSON with no markdown or extra text: {"courseName":"","professorName":"","difficulty":1-5,"assignments":[{"title":"","due":"YYYY-MM-DD","type":"paper|exam|case|homework|project|discussion","estHours":1,"topics":""}]}. Assume year ${new Date().getFullYear()} when no year is given. Return ONLY the JSON object.`}
+            ]}]
+          })
+        });
+        const data=await resp.json();
+        const text=data.content?.map(b=>b.text||"").join("")||"";
+        result=JSON.parse(text.replace(/```json[\s\S]*?```|```/g,"").trim());
+      }else{
+        // Plain text or docx — read as text
+        const text=await file.text();
+        result=await callClaudeJSON(
+          `Parse academic syllabus. Return ONLY valid JSON: {"courseName":"","professorName":"","difficulty":1-5,"assignments":[{"title":"","due":"YYYY-MM-DD","type":"paper|exam|case|homework|project|discussion","estHours":1,"topics":""}]}. Assume year ${new Date().getFullYear()}.`,
+          text.slice(0,3500)
+        );
+      }
       let cid=courses.find(c=>c.name===result.courseName)?.id;
       if(!cid){
         const cols=["#6366f1","#0ea5e9","#ec4899","#10b981","#f59e0b","#8b5cf6"];
@@ -509,7 +540,10 @@ export default function ProPlanner(){
       const{data:ad}=await supabase.from("assignments").insert(rows).select();
       if(ad)setAssignments(p=>[...p,...ad.map(x=>({...x,courseId:x.course_id,due:x.due_date,estHours:x.est_hours,flashcards:[]}))]);
       setUploadMsg(`Imported ${rows.length} assignments`);notify(`Syllabus imported! ${rows.length} assignments added.`);
-    }catch{setUploadMsg("Could not parse. Try a plain .txt file.");}
+    }catch(err){
+      console.error("Syllabus parse error:",err);
+      setUploadMsg("Could not parse syllabus. Make sure it is a readable PDF or try saving as .txt");
+    }
     setUploading(false);
   }
 
