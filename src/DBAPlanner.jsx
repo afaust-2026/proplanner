@@ -495,54 +495,125 @@ export default function ProPlanner(){
   // ── Syllabus import ────────────────────────────────────────────────────────
   async function handleSyllabusUpload(e){
     const file=e.target.files[0];if(!file)return;
-    setUploading(true);setUploadMsg("Reading...");
+    setUploading(true);setUploadMsg("Reading file...");
     const isPDF=file.type==="application/pdf"||file.name.toLowerCase().endsWith(".pdf");
-    let result;
     try{
-      setUploadMsg("Analyzing with AI...");
+      let result;
       if(isPDF){
-        // Send PDF directly to Claude as base64 — Claude reads PDFs natively
+        setUploadMsg("Converting PDF...");
+        // Read PDF as base64
         const base64=await new Promise((res,rej)=>{
           const r=new FileReader();
           r.onload=()=>res(r.result.split(",")[1]);
-          r.onerror=()=>rej(new Error("Read failed"));
+          r.onerror=()=>rej(new Error("Could not read file"));
           r.readAsDataURL(file);
         });
+        setUploadMsg("Sending PDF to AI...");
         const resp=await fetch("https://api.anthropic.com/v1/messages",{
           method:"POST",
-          headers:{"Content-Type":"application/json","x-api-key":ANTH_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+          headers:{
+            "Content-Type":"application/json",
+            "x-api-key":ANTH_KEY,
+            "anthropic-version":"2023-06-01",
+            "anthropic-dangerous-direct-browser-access":"true"
+          },
           body:JSON.stringify({
-            model:"claude-sonnet-4-20250514",max_tokens:2000,
-            messages:[{role:"user",content:[
-              {type:"document",source:{type:"base64",media_type:"application/pdf",data:base64}},
-              {type:"text",text:`Parse this academic syllabus PDF. Return ONLY valid JSON with no markdown or extra text: {"courseName":"","professorName":"","difficulty":1-5,"assignments":[{"title":"","due":"YYYY-MM-DD","type":"paper|exam|case|homework|project|discussion","estHours":1,"topics":""}]}. Assume year ${new Date().getFullYear()} when no year is given. Return ONLY the JSON object.`}
-            ]}]
+            model:"claude-sonnet-4-20250514",
+            max_tokens:2000,
+            messages:[{
+              role:"user",
+              content:[
+                {type:"document",source:{type:"base64",media_type:"application/pdf",data:base64}},
+                {type:"text",text:`You are parsing an academic course syllabus. Extract the course name, professor name, and ALL assignments/exams/deliverables with their due dates.
+
+Return ONLY a valid JSON object — no explanation, no markdown, no backticks. Just raw JSON:
+{
+  "courseName": "full course name and number",
+  "professorName": "professor full name or empty string",
+  "difficulty": 3,
+  "assignments": [
+    {
+      "title": "assignment name",
+      "due": "YYYY-MM-DD",
+      "type": "paper",
+      "estHours": 4,
+      "topics": "key topics covered"
+    }
+  ]
+}
+
+For type use one of: paper, exam, case, homework, project, discussion.
+For difficulty use 1-5 (doctoral courses are typically 4-5).
+Assume year ${new Date().getFullYear()} when no year is specified.
+If a due date is unclear, make your best guess based on context.
+Return ONLY the JSON object, nothing else.`}
+              ]
+            }]
           })
         });
+        if(!resp.ok){
+          const errText=await resp.text();
+          throw new Error(`API error ${resp.status}: ${errText}`);
+        }
         const data=await resp.json();
-        const text=data.content?.map(b=>b.text||"").join("")||"";
-        result=JSON.parse(text.replace(/```json[\s\S]*?```|```/g,"").trim());
+        if(data.error){throw new Error(`Claude error: ${data.error.message}`);}
+        const rawText=data.content?.map(b=>b.text||"").join("")||"";
+        setUploadMsg("Parsing results...");
+        // Clean up response and parse JSON
+        const cleaned=rawText.replace(/```json[\s\S]*?```/g,"").replace(/```[\s\S]*?```/g,"").trim();
+        // Find the JSON object in the response
+        const jsonMatch=cleaned.match(/\{[\s\S]*\}/);
+        if(!jsonMatch){throw new Error(`No JSON found in response: ${cleaned.slice(0,200)}`);}
+        result=JSON.parse(jsonMatch[0]);
       }else{
-        // Plain text or docx — read as text
+        // Plain text file
+        setUploadMsg("Reading text...");
         const text=await file.text();
+        setUploadMsg("Analyzing with AI...");
         result=await callClaudeJSON(
-          `Parse academic syllabus. Return ONLY valid JSON: {"courseName":"","professorName":"","difficulty":1-5,"assignments":[{"title":"","due":"YYYY-MM-DD","type":"paper|exam|case|homework|project|discussion","estHours":1,"topics":""}]}. Assume year ${new Date().getFullYear()}.`,
+          `Parse this academic syllabus. Return ONLY valid JSON: {"courseName":"","professorName":"","difficulty":1-5,"assignments":[{"title":"","due":"YYYY-MM-DD","type":"paper|exam|case|homework|project|discussion","estHours":1,"topics":""}]}. Assume year ${new Date().getFullYear()}.`,
           text.slice(0,3500)
         );
       }
+      // Save course if new
+      setUploadMsg("Saving course...");
       let cid=courses.find(c=>c.name===result.courseName)?.id;
       if(!cid){
         const cols=["#6366f1","#0ea5e9","#ec4899","#10b981","#f59e0b","#8b5cf6"];
-        const{data:cd}=await supabase.from("courses").insert({user_id:authUser.id,name:result.courseName||"New Course",difficulty:result.difficulty||3,color:cols[courses.length%cols.length],professor:result.professorName||""}).select().single();
+        const{data:cd,error:ce}=await supabase.from("courses").insert({
+          user_id:authUser.id,
+          name:result.courseName||"New Course",
+          difficulty:result.difficulty||3,
+          color:cols[courses.length%cols.length],
+          professor:result.professorName||""
+        }).select().single();
+        if(ce)throw new Error(`Course save error: ${ce.message}`);
         if(cd){setCourses(p=>[...p,{...cd,rmpData:null}]);cid=cd.id;}
       }
-      const rows=(result.assignments||[]).map(a=>({user_id:authUser.id,course_id:cid,title:a.title,due_date:a.due,type:a.type||"paper",est_hours:a.estHours||4,done:false,topics:a.topics||"",flashcards:[]}));
-      const{data:ad}=await supabase.from("assignments").insert(rows).select();
+      // Save assignments
+      setUploadMsg("Saving assignments...");
+      const rows=(result.assignments||[]).map(a=>({
+        user_id:authUser.id,course_id:cid,
+        title:a.title||"Untitled",
+        due_date:a.due||new Date().toISOString().slice(0,10),
+        type:a.type||"paper",
+        est_hours:a.estHours||4,
+        done:false,topics:a.topics||"",flashcards:[]
+      }));
+      if(rows.length===0){
+        setUploadMsg("No assignments found in syllabus.");
+        setUploading(false);
+        return;
+      }
+      const{data:ad,error:ae}=await supabase.from("assignments").insert(rows).select();
+      if(ae)throw new Error(`Assignment save error: ${ae.message}`);
       if(ad)setAssignments(p=>[...p,...ad.map(x=>({...x,courseId:x.course_id,due:x.due_date,estHours:x.est_hours,flashcards:[]}))]);
-      setUploadMsg(`Imported ${rows.length} assignments`);notify(`Syllabus imported! ${rows.length} assignments added.`);
+      setUploadMsg(`✓ Imported ${rows.length} assignments from ${result.courseName}`);
+      notify(`Syllabus imported! ${rows.length} assignments added.`);
     }catch(err){
-      console.error("Syllabus parse error:",err);
-      setUploadMsg("Could not parse syllabus. Make sure it is a readable PDF or try saving as .txt");
+      console.error("Syllabus upload error:",err);
+      // Show the actual error message on screen so we can debug
+      setUploadMsg(`Error: ${err.message||"Unknown error"}`);
     }
     setUploading(false);
   }
