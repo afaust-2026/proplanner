@@ -299,7 +299,7 @@ export default function ProPlanner(){
   const[newCourse,setNewCourse]=useState({name:"",difficulty:3,color:"#6366f1",professor:""});
   const[newMilestone,setNewMilestone]=useState({title:"",due:"",notes:""});
   const[newTravel,setNewTravel]=useState({start:"",end:"",label:""});
-  const[newBlock,setNewBlock]=useState({label:"",block_type:"sport",day_of_week:"Mon",start_time:"15:00",end_time:"17:00",date_specific:""});
+  const[newBlock,setNewBlock]=useState({label:"",block_type:"sport",days_of_week:["Mon"],start_time:"15:00",end_time:"17:00",date_specific:""});
 
   // Flashcard state
   const[showFlashModal,setShowFlashModal]=useState(null);
@@ -379,28 +379,80 @@ export default function ProPlanner(){
   // ── Study scheduler (respects work, sports, greek, travel) ─────────────────
   function getStudyWindow(dateStr){
     const dayName=DAYS_SHORT[new Date(dateStr+"T00:00:00").getDay()];
+    // Blocked by travel
     if(travelDates.some(tr=>dateStr>=tr.start&&dateStr<=tr.end))return{available:false,slot:"Traveling"};
     const dayBlocks=scheduleBlocks.filter(b=>b.day_of_week===dayName||b.date_specific===dateStr);
     const ws=workSched[dayName];
-    if(!ws?.work&&dayBlocks.length===0)return{available:true,slot:"All day"};
-    if(ws?.work){const endH=parseInt(ws.end?.split(":")[0]||18);return{available:true,slot:`Evening (${endH>=18?"7":"6"}-9 PM)`};}
-    const latest=dayBlocks.reduce((max,b)=>{const h=parseInt(b.end_time?.split(":")[0]||18);return h>max?h:max;},16);
-    return{available:true,slot:`After ${latest}:00`};
+    // Calculate free hours in the day
+    // Day = 7am to 10pm = 15 usable hours
+    let blockedHours=0;
+    if(ws?.work){
+      const startH=parseInt(ws.start?.split(":")[0]||8);
+      const endH=parseInt(ws.end?.split(":")[0]||18);
+      blockedHours+=Math.max(0,endH-startH);
+    }
+    dayBlocks.forEach(b=>{
+      const bStart=parseInt(b.start_time?.split(":")[0]||15);
+      const bEnd=parseInt(b.end_time?.split(":")[0]||17);
+      blockedHours+=Math.max(0,bEnd-bStart);
+    });
+    // Need at least 2 free hours to study
+    if(blockedHours>=13)return{available:false,slot:"Day fully booked"};
+    // Determine best study slot
+    if(!ws?.work&&dayBlocks.length===0)return{available:true,slot:"All day — pick your best time"};
+    if(ws?.work){
+      const workEnd=parseInt(ws.end?.split(":")[0]||18);
+      // Check if morning before work is free (before 8am start = unlikely, so evening default)
+      const workStart=parseInt(ws.start?.split(":")[0]||8);
+      if(workStart>=9){
+        return{available:true,slot:`Morning before work or Evening after ${workEnd}:00`};
+      }
+      return{available:true,slot:`Evening after ${workEnd}:00`};
+    }
+    // Activity blocks only — study around them
+    const latestBlock=dayBlocks.reduce((max,b)=>{
+      const h=parseInt(b.end_time?.split(":")[0]||17);return h>max?h:max;
+    },0);
+    const earliestBlock=dayBlocks.reduce((min,b)=>{
+      const h=parseInt(b.start_time?.split(":")[0]||15);return h<min?h:min;
+    },24);
+    if(earliestBlock>=12)return{available:true,slot:`Morning (before ${earliestBlock}:00)`};
+    return{available:true,slot:`After ${latestBlock}:00`};
   }
 
   function generateStudyBlocks(){
     const blocks=[];
-    assignments.filter(a=>!a.done&&daysUntil(a.due)>=0).sort((a,b)=>new Date(a.due)-new Date(b.due)).forEach(assign=>{
+    // Track how many study sessions are placed per date (max 2 per day across all assignments)
+    const dailyCount={};
+    const pendingAssignments=assignments.filter(a=>!a.done&&daysUntil(a.due)>=0).sort((a,b)=>new Date(a.due)-new Date(b.due));
+    pendingAssignments.forEach(assign=>{
       const course=courses.find(c=>c.id===assign.courseId);
       const diff=course?.rmpData?Math.round((course.difficulty+rmpToInternal(course.rmpData.avgDifficulty))/2):course?.difficulty||3;
-      const sessions=Math.ceil(assign.estHours*(diff/3)/2);
-      let placed=0,checkDay=new Date();checkDay.setHours(0,0,0,0);
+      // Calculate sessions needed: estHours adjusted by difficulty, in 2-hr sessions
+      const adjustedHours=assign.estHours*(diff/3);
+      const sessions=Math.ceil(adjustedHours/2);
+      let placed=0;
+      let checkDay=new Date();
+      checkDay.setHours(0,0,0,0);
       const dueDay=new Date(assign.due+"T00:00:00");
+      // Try to spread sessions evenly — start from today and work forward
       while(placed<sessions&&checkDay<dueDay){
         const dateStr=checkDay.toISOString().slice(0,10);
         const win=getStudyWindow(dateStr);
-        if(win.available&&!blocks.find(b=>b.date===dateStr&&b.assignId===assign.id)){
-          blocks.push({id:`${assign.id}-${dateStr}`,assignId:assign.id,courseId:assign.courseId,title:`Study: ${assign.title}`,date:dateStr,slot:win.slot,hours:2,color:course?.color||T.accent});
+        const alreadyOnDay=dailyCount[dateStr]||0;
+        // Place a block if: day is available, this assignment not already on this day, max 2 sessions per day
+        if(win.available&&!blocks.find(b=>b.date===dateStr&&b.assignId===assign.id)&&alreadyOnDay<2){
+          blocks.push({
+            id:`${assign.id}-${dateStr}`,
+            assignId:assign.id,
+            courseId:assign.courseId,
+            title:`Study: ${assign.title}`,
+            date:dateStr,
+            slot:win.slot,
+            hours:2,
+            color:course?.color||T.accent,
+          });
+          dailyCount[dateStr]=(dailyCount[dateStr]||0)+1;
           placed++;
         }
         checkDay.setDate(checkDay.getDate()+1);
@@ -464,9 +516,22 @@ export default function ProPlanner(){
 
   async function addScheduleBlock(){
     if(!newBlock.label)return notify("Add a label.");
-    const{data}=await supabase.from("schedule_blocks").insert({user_id:authUser.id,...newBlock}).select().single();
-    setScheduleBlocks(p=>[...p,data]);
-    setShowAddBlock(false);setNewBlock({label:"",block_type:"sport",day_of_week:"Mon",start_time:"15:00",end_time:"17:00",date_specific:""});notify("Block added!");
+    const daysToAdd=newBlock.date_specific?[""]:(newBlock.days_of_week||["Mon"]);
+    const rows=daysToAdd.map(day=>({
+      user_id:authUser.id,
+      label:newBlock.label,
+      block_type:newBlock.block_type,
+      day_of_week:day||"Mon",
+      start_time:newBlock.start_time,
+      end_time:newBlock.end_time,
+      date_specific:newBlock.date_specific||"",
+    }));
+    const{data,error}=await supabase.from("schedule_blocks").insert(rows).select();
+    if(error)return notify("Error saving block.");
+    setScheduleBlocks(p=>[...p,...(data||[])]);
+    setShowAddBlock(false);
+    setNewBlock({label:"",block_type:"sport",days_of_week:["Mon"],start_time:"15:00",end_time:"17:00",date_specific:""});
+    notify(`Block added for ${daysToAdd.length} day${daysToAdd.length>1?"s":""}!`);
   }
 
   async function deleteScheduleBlock(id){
@@ -509,11 +574,14 @@ export default function ProPlanner(){
           r.readAsDataURL(file);
         });
         setUploadMsg("Sending PDF to AI...");
+        // Check key is present before calling
+        const apiKey=import.meta.env.VITE_ANTHROPIC_KEY||"";
+        if(!apiKey){throw new Error("API key not found. Check VITE_ANTHROPIC_KEY in Vercel environment variables.");}
         const resp=await fetch("https://api.anthropic.com/v1/messages",{
           method:"POST",
           headers:{
             "Content-Type":"application/json",
-            "x-api-key":ANTH_KEY,
+            "x-api-key":apiKey,
             "anthropic-version":"2023-06-01",
             "anthropic-dangerous-direct-browser-access":"true"
           },
@@ -1434,13 +1502,25 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
               <option value="other">📌 Other Commitment</option>
             </select>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
-            <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Recurring Day</div>
-              <select className="ifield" value={newBlock.day_of_week} onChange={e=>setNewBlock(b=>({...b,day_of_week:e.target.value}))}>
-                {DAYS_SHORT.map(d=><option key={d} value={d}>{d}</option>)}
-              </select>
+          <div>
+            <div style={{fontSize:11,color:T.muted,marginBottom:6}}>Recurring Days <span style={{color:T.faint}}>(tap to select multiple)</span></div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+              {DAYS_SHORT.map(d=>{
+                const selected=(newBlock.days_of_week||[]).includes(d);
+                return(
+                  <button key={d} type="button" onClick={()=>{
+                    const current=newBlock.days_of_week||[];
+                    const updated=selected?current.filter(x=>x!==d):[...current,d];
+                    setNewBlock(b=>({...b,days_of_week:updated.length>0?updated:current}));
+                  }} style={{padding:"6px 12px",borderRadius:8,border:`2px solid ${selected?T.accent:T.border2}`,background:selected?`rgba(${rgb},.15)`:"transparent",color:selected?T.accent:T.muted,fontSize:12,fontWeight:selected?700:400,cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}}>
+                    {d}
+                  </button>
+                );
+              })}
             </div>
-            <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Specific Date (optional)</div><input type="date" className="ifield" value={newBlock.date_specific} onChange={e=>setNewBlock(b=>({...b,date_specific:e.target.value}))}/></div>
+            <div style={{fontSize:11,color:T.muted,marginBottom:3}}>— OR — Specific one-time date</div>
+            <input type="date" className="ifield" value={newBlock.date_specific} onChange={e=>setNewBlock(b=>({...b,date_specific:e.target.value}))} style={{fontSize:12}}/>
+            {newBlock.date_specific&&<div style={{fontSize:10,color:T.faint,marginTop:3}}>Specific date set — recurring days will be ignored for this block.</div>}
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
             <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Start Time</div><input type="time" className="ifield" value={newBlock.start_time} onChange={e=>setNewBlock(b=>({...b,start_time:e.target.value}))}/></div>
