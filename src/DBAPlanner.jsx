@@ -806,7 +806,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
       aside{position:fixed!important;top:0;left:0;bottom:0;z-index:100;box-shadow:4px 0 20px rgba(0,0,0,.3);}
       main{padding:14px 16px!important;}
     }
-    .stat-card:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(${accentRgb},.2);cursor:pointer;}
+    .stat-card:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(${rgb},.2);cursor:pointer;}
     .stat-card{transition:transform .2s,box-shadow .2s;}
   `;
 
