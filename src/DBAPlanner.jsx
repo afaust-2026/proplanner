@@ -265,7 +265,7 @@ export default function ProPlanner(){
   // UI state
   const[view,setView]=useState("dashboard");
   const[dark,setDark]=useState(()=>window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);
-  const[sidebarOpen,setSidebar]=useState(true);
+  const[sidebarOpen,setSidebar]=useState(()=>window.innerWidth>768);
   const[chatOpen,setChatOpen]=useState(false);
 
   // Data state — all loaded from Supabase per user
@@ -322,8 +322,10 @@ export default function ProPlanner(){
   // Calendar state
   const[calYear,setCalYear]=useState(t.year);
   const[calMonth,setCalMonth]=useState(t.month);
-  const[selectedDay,setSelectedDay]=useState(null);
+  const[selectedDay,setSelectedDay]=useState(t.day); // default to today
 
+  // Confirmation modal state
+  const[confirmModal,setConfirmModal]=useState(null); // {message, onConfirm, detail}
   // Dissertation state
   const[showReflection,setShowReflection]=useState(false);
   const[weeklyReflection,setWeeklyReflection]=useState("");
@@ -375,6 +377,7 @@ export default function ProPlanner(){
   }
 
   function notify(msg){setNotification(msg);setTimeout(()=>setNotification(""),3500);}
+  function confirm(message,onConfirm,detail=""){setConfirmModal({message,onConfirm,detail});}
 
   // ── Study scheduler (respects work, sports, greek, travel) ─────────────────
   function getStudyWindow(dateStr){
@@ -471,7 +474,7 @@ export default function ProPlanner(){
   }
 
   async function deleteCourse(id){
-    if(!window.confirm("Drop this course and all its assignments?"))return;
+    confirm("Drop this course?",()=>doDeleteCourse(id),`This will also permanently remove all assignments for this course.`);return;
     await supabase.from("courses").delete().eq("id",id);
     await supabase.from("assignments").delete().eq("course_id",id);
     setCourses(p=>p.filter(c=>c.id!==id));
@@ -490,7 +493,7 @@ export default function ProPlanner(){
   }
 
   async function deleteAssignment(id){
-    if(!window.confirm("Delete this assignment?"))return;
+    confirm("Delete this assignment?",()=>doDeleteAssignment(id));return;
     await supabase.from("assignments").delete().eq("id",id);
     setAssignments(p=>p.filter(a=>a.id!==id));notify("Deleted.");
   }
@@ -768,7 +771,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
     {id:"assignments",icon:"◉",label:"Assignments"},
     {id:"courses",icon:"◎",label:"Courses"},
     {id:"schedule",icon:"⊞",label:"My Schedule"},
-    {id:"dissertation",icon:"⬟",label:"Dissertation"},
+    {id:"dissertation",icon:"⬟",label:["doctoral","postdoc"].includes(profile?.degree_level)?"Dissertation":["graduate"].includes(profile?.degree_level)?"Thesis / Capstone":"Major Project"},
     {id:"flashcards",icon:"⬡",label:"Flashcards"},
     {id:"settings",icon:"◌",label:"Settings"},
   ];
@@ -796,6 +799,12 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
     .prog-bar{background:${T.border};border-radius:4px;height:5px;overflow:hidden;}
     .prog-fill{height:100%;border-radius:4px;transition:width .4s;}
     .del-btn{background:transparent;border:1px solid ${T.border2};border-radius:6px;padding:3px 8px;font-size:11px;color:${T.danger};cursor:pointer;transition:all .2s;}.del-btn:hover{background:rgba(239,68,68,.08);border-color:${T.danger};}
+    @media(max-width:768px){
+      aside{position:fixed!important;top:0;left:0;bottom:0;z-index:100;box-shadow:4px 0 20px rgba(0,0,0,.3);}
+      main{padding:14px 16px!important;}
+    }
+    .stat-card:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(${accentRgb},.2);cursor:pointer;}
+    .stat-card{transition:transform .2s,box-shadow .2s;}
   `;
 
   // ── Auth / onboarding gates ─────────────────────────────────────────────────
@@ -830,7 +839,9 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
       <div style={{display:"flex",flex:1,overflow:"hidden"}}>
 
         {/* ═══ SIDEBAR ═══ */}
-        <aside style={{width:sidebarOpen?226:58,background:T.sidebar,borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",flexShrink:0,overflow:"hidden",transition:"width .25s ease"}}>
+        {/* Mobile overlay */}
+        {sidebarOpen&&<div onClick={()=>setSidebar(false)} style={{display:"none","@media(max-width:768px)":{display:"block"},position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:99}}/>}
+        <aside style={{width:sidebarOpen?226:58,background:T.sidebar,borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",flexShrink:0,overflow:"hidden",transition:"width .25s ease",position:"relative",zIndex:100}}>
           <div style={{padding:"14px 9px 12px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:sidebarOpen?"space-between":"center",background:`linear-gradient(135deg,rgba(${rgb},.12),rgba(${rgb},.04))`}}>
             {sidebarOpen&&<div style={{overflow:"hidden",marginRight:5}}>
               <div style={{fontSize:9,letterSpacing:3,color:T.accent,textTransform:"uppercase",fontWeight:700,whiteSpace:"nowrap"}}>{uni.abbr} · {profile.full_name?.split(" ")[0]}</div>
@@ -839,12 +850,16 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
             <button onClick={()=>setSidebar(o=>!o)} style={{background:"transparent",border:`1px solid ${T.border2}`,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",color:T.muted,fontSize:11,flexShrink:0}}>{sidebarOpen?"←":"→"}</button>
           </div>
           <nav style={{flex:1,padding:"9px 6px",display:"flex",flexDirection:"column",gap:2,overflowY:"auto"}}>
-            {NAV.map(item=>(
-              <button key={item.id} onClick={()=>setView(item.id)} title={item.label} className="nb" style={{background:view===item.id?`rgba(${rgb},.12)`:"transparent",border:`1px solid ${view===item.id?T.accent:"transparent"}`,color:view===item.id?T.accent:T.muted,justifyContent:sidebarOpen?"flex-start":"center"}}>
+            {NAV.map(item=>{
+              const badge=item.id==="assignments"?overdue.length:item.id==="calendar"&&todayStudy.length>0?todayStudy.length:0;
+              return(
+              <button key={item.id} onClick={()=>setView(item.id)} title={item.label} className="nb" style={{background:view===item.id?`rgba(${rgb},.12)`:"transparent",border:`1px solid ${view===item.id?T.accent:"transparent"}`,color:view===item.id?T.accent:T.muted,justifyContent:sidebarOpen?"flex-start":"center",position:"relative"}}>
                 <span style={{fontSize:16,flexShrink:0}}>{item.icon}</span>
-                {sidebarOpen&&<span style={{whiteSpace:"nowrap",overflow:"hidden"}}>{item.label}</span>}
+                {sidebarOpen&&<span style={{whiteSpace:"nowrap",overflow:"hidden",flex:1}}>{item.label}</span>}
+                {badge>0&&<span style={{background:T.danger,color:"#fff",borderRadius:10,fontSize:9,fontWeight:700,padding:"1px 5px",minWidth:16,textAlign:"center",flexShrink:0}}>{badge}</span>}
               </button>
-            ))}
+              );
+            })}
           </nav>
           {overdue.length>0&&<div style={{margin:"0 6px 6px",background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.3)",borderRadius:8,padding:"7px 8px",overflow:"hidden"}}>
             <div style={{fontSize:10,color:T.danger,fontWeight:700,whiteSpace:"nowrap"}}>⚠ {sidebarOpen?"OVERDUE":overdue.length}</div>
@@ -888,8 +903,8 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                 </div>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:10,marginBottom:14}}>
-                {[{l:"Courses",v:courses.length,c:T.accent},{l:"Pending",v:assignments.filter(a=>!a.done).length,c:T.warning},{l:"Study Hrs/Wk",v:studyBlocks.filter(b=>{const d=new Date(b.date),n=new Date();return d>=n&&(d-n)<7*86400000;}).length*2,c:"#0ea5e9"},{l:"Milestones",v:milestones.filter(m=>!m.done).length,c:"#a78bfa"},{l:"Done",v:assignments.filter(a=>a.done).length,c:T.success}].map(s=>(
-                  <div key={s.l} className="card" style={{textAlign:"center",borderTop:`2px solid ${s.c}`}}>
+                {[{l:"Courses",v:courses.length,c:T.accent,nav:"courses"},{l:"Pending",v:assignments.filter(a=>!a.done).length,c:T.warning,nav:"assignments"},{l:"Study Hrs/Wk",v:studyBlocks.filter(b=>{const d=new Date(b.date),n=new Date();return d>=n&&(d-n)<7*86400000;}).length*2,c:"#0ea5e9",nav:"calendar"},{l:"Milestones",v:milestones.filter(m=>!m.done).length,c:"#a78bfa",nav:"dissertation"},{l:"Done",v:assignments.filter(a=>a.done).length,c:T.success,nav:"assignments"}].map(s=>(
+                  <div key={s.l} className="card stat-card" onClick={()=>setView(s.nav)} title={`Go to ${s.nav}`} style={{textAlign:"center",borderTop:`2px solid ${s.c}`}}>
                     <div style={{fontSize:26,fontWeight:700,color:s.c}}>{s.v}</div>
                     <div style={{fontSize:9,color:T.muted,marginTop:2,letterSpacing:1,textTransform:"uppercase"}}>{s.l}</div>
                   </div>
@@ -920,7 +935,10 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                     </div>
                   ))}
                   <div style={{marginTop:9,padding:9,background:T.subcard,borderRadius:8,border:`1px solid ${T.border2}`}}>
-                    <div style={{fontSize:10,color:T.muted,marginBottom:6,letterSpacing:1,textTransform:"uppercase"}}>Today's Energy Level</div>
+                    <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:6}}>
+                      <div style={{fontSize:10,color:T.muted,letterSpacing:1,textTransform:"uppercase"}}>Today's Energy Level</div>
+                      <span title="Log your energy daily. The AI uses this to suggest better study times and adapt your schedule." style={{fontSize:11,color:T.faint,cursor:"help"}}>ⓘ</span>
+                    </div>
                     <div style={{display:"flex",gap:5}}>
                       {[1,2,3,4,5].map(lvl=>{const cols=["#ef4444","#f97316","#eab308","#84cc16","#22c55e"];const emojis=["😴","😓","😐","😊","🚀"];const active=todayEnergy===lvl;return(
                         <button key={lvl} onClick={()=>logEnergy(lvl)} style={{width:30,height:30,borderRadius:"50%",border:`2px solid ${active?cols[lvl-1]:T.border2}`,background:active?cols[lvl-1]+"33":"transparent",fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{emojis[lvl-1]}</button>
@@ -931,7 +949,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                 <div className="card" style={{borderLeft:`3px solid ${T.accent}`}}>
-                  <div style={{fontSize:10,letterSpacing:2,color:T.accent,textTransform:"uppercase",marginBottom:7}}>Dissertation Progress</div>
+                  <div style={{fontSize:10,letterSpacing:2,color:T.accent,textTransform:"uppercase",marginBottom:7}}>{["doctoral","postdoc"].includes(profile?.degree_level)?"Dissertation Progress":["graduate"].includes(profile?.degree_level)?"Thesis Progress":"Major Project Progress"}</div>
                   {nextMilestone?(<>
                     <div style={{fontWeight:600,fontSize:13,marginBottom:2}}>{nextMilestone.title}</div>
                     <div style={{fontSize:11,color:T.muted,marginBottom:6}}>{nextMilestone.notes}</div>
@@ -967,7 +985,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
             <div className="fi">
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
                 <div><div style={{fontSize:10,letterSpacing:3,color:T.accent,textTransform:"uppercase"}}>Calendar</div><h1 style={{fontSize:22,fontWeight:700}}>{MONTHS[calMonth]} {calYear}</h1></div>
-                <div style={{display:"flex",gap:6}}><button className="bg2" onClick={prevMonth}>←</button><button className="bg2" onClick={()=>{setCalYear(t.year);setCalMonth(t.month);}}>Today</button><button className="bg2" onClick={nextMonth}>→</button></div>
+                <div style={{display:"flex",gap:6}}><button className="bg2" onClick={prevMonth}>←</button><button className="bg2" onClick={()=>{setCalYear(t.year);setCalMonth(t.month);setSelectedDay(t.day);}}>Today</button><button className="bg2" onClick={nextMonth}>→</button></div>
               </div>
               <div style={{display:"flex",gap:12,marginBottom:9,fontSize:11,color:T.muted,flexWrap:"wrap"}}>
                 <span><span style={{display:"inline-block",width:8,height:8,borderRadius:2,background:T.accent,marginRight:4}}/>Due</span>
@@ -1021,7 +1039,17 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                   <button className="bp" onClick={()=>setShowAddAssign(true)}>+ Add</button>
                 </div>
               </div>
-              {courses.length===0&&<div style={{color:T.faint,fontSize:13,padding:"20px",textAlign:"center"}}>No courses yet. Add a course first, then add assignments.</div>}
+              {courses.length===0&&(
+                <div style={{textAlign:"center",padding:"40px 20px",color:T.muted}}>
+                  <div style={{fontSize:48,marginBottom:14}}>📚</div>
+                  <div style={{fontWeight:700,fontSize:16,marginBottom:8,color:T.text}}>No assignments yet</div>
+                  <div style={{fontSize:13,marginBottom:20,lineHeight:1.6}}>Upload a syllabus and ProPlanner will automatically extract all your assignments, due dates, and topics.</div>
+                  <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
+                    <label style={{cursor:"pointer"}}><input type="file" accept=".txt,.pdf,.docx" onChange={handleSyllabusUpload} style={{display:"none"}}/><span className="bp" style={{display:"inline-block",padding:"9px 18px"}}>📄 Upload Syllabus</span></label>
+                    <button className="bg2" onClick={()=>setShowAddCourse(true)}>+ Add Course Manually</button>
+                  </div>
+                </div>
+              )}
               {courses.map(course=>{
                 const ca=assignments.filter(a=>a.courseId===course.id);if(!ca.length)return null;
                 return(<div key={course.id} style={{marginBottom:16}}>
@@ -1210,7 +1238,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
           {view==="dissertation"&&(
             <div className="fi">
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:13}}>
-                <div><div style={{fontSize:10,letterSpacing:3,color:T.accent,textTransform:"uppercase"}}>Doctoral Journey</div><h1 style={{fontSize:22,fontWeight:700}}>Dissertation Tracker</h1></div>
+                <div><div style={{fontSize:10,letterSpacing:3,color:T.accent,textTransform:"uppercase"}}>{["doctoral","postdoc"].includes(profile?.degree_level)?"Doctoral Journey":"Academic Journey"}</div><h1 style={{fontSize:22,fontWeight:700}}>{["doctoral","postdoc"].includes(profile?.degree_level)?"Dissertation Tracker":["graduate"].includes(profile?.degree_level)?"Thesis & Capstone Tracker":"Major Project Tracker"}</h1></div>
                 <div style={{display:"flex",gap:7}}>
                   <button className="bg2" style={{fontSize:11}} onClick={()=>setShowReflection(r=>!r)}>📝 Weekly Reflection</button>
                   <button className="bp" onClick={()=>setShowAddMilestone(true)}>+ Milestone</button>
@@ -1269,7 +1297,14 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
               <div style={{marginBottom:13}}><div style={{fontSize:10,letterSpacing:3,color:"#a78bfa",textTransform:"uppercase"}}>Study Tools</div><h1 style={{fontSize:22,fontWeight:700}}>Flashcards</h1></div>
               {!showFlashModal&&(
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(210px,1fr))",gap:11}}>
-                  {assignments.filter(a=>!a.done).length===0&&<div style={{color:T.faint,fontSize:13,gridColumn:"1/-1",textAlign:"center",padding:20}}>No pending assignments to generate flashcards for.</div>}
+                  {assignments.filter(a=>!a.done).length===0&&(
+                    <div style={{gridColumn:"1/-1",textAlign:"center",padding:"40px 20px",color:T.muted}}>
+                      <div style={{fontSize:48,marginBottom:14}}>⬡</div>
+                      <div style={{fontWeight:700,fontSize:16,marginBottom:8,color:T.text}}>No flashcard sets yet</div>
+                      <div style={{fontSize:13,marginBottom:20,lineHeight:1.6,maxWidth:360,margin:"0 auto 20px"}}>Flashcards are generated from your assignments. Add courses and assignments first, then come back here to create AI-powered study cards for each one.</div>
+                      <button className="bp" onClick={()=>setView("assignments")}>Go to Assignments →</button>
+                    </div>
+                  )}
                   {assignments.filter(a=>!a.done).map(a=>{
                     const course=courses.find(c=>c.id===a.courseId);const hasCards=a.flashcards?.length>0;const mastered=a.flashcards?.filter(c=>c.mastered).length||0;
                     return(<div key={a.id} onClick={()=>{setShowFlashModal(a.id);setStudyMode(hasCards);setActiveCard(0);setCardFlipped(false);}} style={{padding:"12px",background:dark?"#12121a":T.card,border:`2px solid ${T.border}`,borderRadius:10,cursor:"pointer",transition:"all .2s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#a78bfa"} onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}>
@@ -1356,11 +1391,21 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                 <div className="card">
                   <div style={{fontWeight:700,marginBottom:10}}>Your Profile</div>
-                  {[["Name",profile.full_name],["Degree",DEGREE_LEVELS.find(d=>d.id===profile.degree_level)?.label||"—"],["University",uni.name],["Greek Org",profile.greek_org||"—"],["Sports",profile.sports?.join(", ")||"—"],["Working Pro",profile.is_working_professional?"Yes":"No"]].map(([k,v])=>(
-                    <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${T.border}`,fontSize:12}}>
-                      <span style={{color:T.muted}}>{k}</span><span style={{fontWeight:600}}>{v}</span>
+                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Name</div><input className="ifield" value={profile.full_name||""} onChange={e=>setProfile(p=>({...p,full_name:e.target.value}))} style={{fontSize:12}}/></div>
+                    {[["Degree",DEGREE_LEVELS.find(d=>d.id===profile.degree_level)?.label||"—"],["University",uni.name]].map(([k,v])=>(
+                      <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${T.border}`,fontSize:12}}>
+                        <span style={{color:T.muted}}>{k}</span><span style={{fontWeight:600}}>{v}</span>
+                      </div>
+                    ))}
+                    <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Greek Org</div><input className="ifield" value={profile.greek_org||""} onChange={e=>setProfile(p=>({...p,greek_org:e.target.value}))} style={{fontSize:12}} placeholder="Organization name"/></div>
+                    <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Working Professional</div>
+                      <div style={{display:"flex",gap:8}}>
+                        {["Yes","No"].map(o=><button key={o} onClick={()=>setProfile(p=>({...p,is_working_professional:o==="Yes"}))} style={{flex:1,padding:"6px",borderRadius:7,border:`1px solid ${(profile.is_working_professional&&o==="Yes")||(!profile.is_working_professional&&o==="No")?T.accent:T.border2}`,background:(profile.is_working_professional&&o==="Yes")||(!profile.is_working_professional&&o==="No")?`rgba(${rgb},.1)`:"transparent",color:(profile.is_working_professional&&o==="Yes")||(!profile.is_working_professional&&o==="No")?T.accent:T.muted,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{o}</button>)}
+                      </div>
                     </div>
-                  ))}
+                    <button className="bp" style={{fontSize:12,marginTop:4}} onClick={async()=>{await supabase.from("profiles").update({full_name:profile.full_name,greek_org:profile.greek_org,is_working_professional:profile.is_working_professional}).eq("id",authUser.id);notify("Profile updated!");}}>Save Changes</button>
+                  </div>
                 </div>
                 <div className="card">
                   <div style={{fontWeight:700,marginBottom:10}}>Appearance</div>
@@ -1379,7 +1424,10 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                     <div key={item.name} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 0",borderBottom:`1px solid ${T.border}`}}>
                       <span style={{fontSize:16}}>{item.icon}</span>
                       <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600}}>{item.name}</div><div style={{fontSize:10,color:T.muted}}>{item.desc}</div></div>
-                      <button className="bg2" style={{fontSize:11,color:T.accent,borderColor:T.accent}} onClick={()=>notify(`${item.name}: coming in v2!`)}>Connect</button>
+                      <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:2}}>
+                        <span style={{fontSize:9,background:`rgba(${rgb},.15)`,color:T.accent,padding:"1px 6px",borderRadius:8,border:`1px solid rgba(${rgb},.3)`,fontWeight:600,letterSpacing:.5}}>COMING SOON</span>
+                        <button style={{background:"transparent",border:`1px solid ${T.border2}`,borderRadius:6,padding:"2px 8px",fontSize:10,color:T.faint,cursor:"pointer",fontFamily:"inherit"}} onClick={()=>notify(`${item.name} integration is coming in v2! We will notify you when it's ready.`)}>Notify Me</button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1461,7 +1509,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
           <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Course Name</div><input className="ifield" placeholder="e.g. BCOM 6304 – Strategy" value={newCourse.name} onChange={e=>setNewCourse(c=>({...c,name:e.target.value}))}/></div>
           <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Professor (for RMP lookup)</div><input className="ifield" placeholder="Professor name" value={newCourse.professor} onChange={e=>setNewCourse(c=>({...c,professor:e.target.value}))}/></div>
           <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Difficulty: {newCourse.difficulty}/5</div><input type="range" min={1} max={5} value={newCourse.difficulty} onChange={e=>setNewCourse(c=>({...c,difficulty:+e.target.value}))} style={{width:"100%",accentColor:T.accent}}/></div>
-          <div><div style={{fontSize:11,color:T.muted,marginBottom:6}}>Color</div><div style={{display:"flex",gap:7}}>{["#6366f1","#0ea5e9","#ec4899","#10b981","#f59e0b","#8b5cf6","#ef4444"].map(col=><div key={col} onClick={()=>setNewCourse(c=>({...c,color:col}))} style={{width:24,height:24,borderRadius:6,background:col,cursor:"pointer",border:newCourse.color===col?"3px solid #fff":"3px solid transparent"}}/>)}</div></div>
+          <div><div style={{fontSize:11,color:T.muted,marginBottom:6}}>Color</div><div style={{display:"flex",gap:7}}>{["#6366f1","#0ea5e9","#ec4899","#10b981","#f59e0b","#8b5cf6","#ef4444","#14b8a6","#f97316","#06b6d4","#84cc16","#a855f7"].map(col=><div key={col} onClick={()=>setNewCourse(c=>({...c,color:col}))} title={courses.some(x=>x.color===col)?"Already used by another course":col} style={{width:24,height:24,borderRadius:6,background:col,cursor:"pointer",border:newCourse.color===col?"3px solid #fff":"3px solid transparent",opacity:courses.some(x=>x.color===col)?.6:1}}/>)}</div></div>
           <div style={{display:"flex",gap:8,marginTop:4}}><button className="bg2" style={{flex:1}} onClick={()=>setShowAddCourse(false)}>Cancel</button><button className="bp" style={{flex:1}} onClick={addCourse}>Add Course</button></div>
         </div>
       </div></div>)}
@@ -1530,6 +1578,22 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
         </div>
       </div></div>)}
 
+    </div>
+
+      {/* ═══ CONFIRM MODAL ═══ */}
+      {confirmModal&&(
+        <div className="mo" onClick={()=>setConfirmModal(null)}>
+          <div className="md fi" onClick={e=>e.stopPropagation()} style={{maxWidth:380}}>
+            <div style={{fontSize:20,marginBottom:12,textAlign:"center"}}>⚠️</div>
+            <div style={{fontWeight:700,fontSize:16,marginBottom:8,textAlign:"center"}}>{confirmModal.message}</div>
+            {confirmModal.detail&&<div style={{fontSize:12,color:T.muted,marginBottom:16,textAlign:"center",lineHeight:1.6,padding:"8px 12px",background:T.subcard,borderRadius:8}}>{confirmModal.detail}</div>}
+            <div style={{display:"flex",gap:10,marginTop:8}}>
+              <button className="bg2" style={{flex:1}} onClick={()=>setConfirmModal(null)}>Cancel</button>
+              <button style={{flex:1,background:T.danger,color:"#fff",border:"none",borderRadius:8,padding:"9px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}} onClick={()=>{confirmModal.onConfirm();setConfirmModal(null);}}>Yes, Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
