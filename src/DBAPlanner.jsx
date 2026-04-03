@@ -1578,7 +1578,6 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
         </div>
       </div></div>)}
 
-    </div>
 
       {/* ═══ CONFIRM MODAL ═══ */}
       {confirmModal&&(
