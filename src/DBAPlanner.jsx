@@ -265,7 +265,7 @@ export default function ProPlanner(){
   // UI state
   const[view,setView]=useState("dashboard");
   const[dark,setDark]=useState(()=>window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);
-  const[sidebarOpen,setSidebar]=useState(()=>window.innerWidth>768);
+  const[sidebarOpen,setSidebar]=useState(true);
   const[chatOpen,setChatOpen]=useState(false);
 
   // Data state — all loaded from Supabase per user
@@ -322,7 +322,7 @@ export default function ProPlanner(){
   // Calendar state
   const[calYear,setCalYear]=useState(t.year);
   const[calMonth,setCalMonth]=useState(t.month);
-  const[selectedDay,setSelectedDay]=useState(t.day); // default to today
+  const[selectedDay,setSelectedDay]=useState(null);
 
   // Confirmation modal state
   const[confirmModal,setConfirmModal]=useState(null); // {message, onConfirm, detail}
@@ -377,7 +377,7 @@ export default function ProPlanner(){
   }
 
   function notify(msg){setNotification(msg);setTimeout(()=>setNotification(""),3500);}
-  function confirm(message,onConfirm,detail=""){setConfirmModal({message,onConfirm,detail});}
+  function showConfirm(message,onConfirm,detail=""){setConfirmModal({message,onConfirm,detail});}
 
   // ── Study scheduler (respects work, sports, greek, travel) ─────────────────
   function getStudyWindow(dateStr){
@@ -474,7 +474,7 @@ export default function ProPlanner(){
   }
 
   async function deleteCourse(id){
-    confirm("Drop this course?",()=>doDeleteCourse(id),`This will also permanently remove all assignments for this course.`);return;
+    showConfirm("Drop this course?",()=>doDeleteCourse(id),`This will also permanently remove all assignments for this course.`);return;
     await supabase.from("courses").delete().eq("id",id);
     await supabase.from("assignments").delete().eq("course_id",id);
     setCourses(p=>p.filter(c=>c.id!==id));
@@ -493,7 +493,7 @@ export default function ProPlanner(){
   }
 
   async function deleteAssignment(id){
-    confirm("Delete this assignment?",()=>doDeleteAssignment(id));return;
+    showConfirm("Delete this assignment?",()=>doDeleteAssignment(id));return;
     await supabase.from("assignments").delete().eq("id",id);
     setAssignments(p=>p.filter(a=>a.id!==id));notify("Deleted.");
   }
