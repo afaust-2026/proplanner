@@ -2,10 +2,12 @@ import { useState, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 // ─── Supabase + Claude config ─────────────────────────────────────────────────
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL || "",
-  import.meta.env.VITE_SUPABASE_ANON || ""
-);
+const SUPA_URL = import.meta.env.VITE_SUPABASE_URL || "";
+const SUPA_KEY = import.meta.env.VITE_SUPABASE_ANON || "";
+// Safely create client - if env vars missing show helpful error instead of crashing
+const supabase = (SUPA_URL && SUPA_KEY)
+  ? createClient(SUPA_URL, SUPA_KEY)
+  : null;
 const ANTH_KEY = import.meta.env.VITE_ANTHROPIC_KEY || "";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -336,6 +338,7 @@ export default function ProPlanner(){
 
   // ── Auth setup ─────────────────────────────────────────────────────────────
   useEffect(()=>{
+    if(!supabase){setAuthLoading(false);return;}
     supabase.auth.getSession().then(({data:{session}})=>{
       setAuthUser(session?.user||null);
       setAuthLoading(false);
@@ -808,6 +811,17 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
   `;
 
   // ── Auth / onboarding gates ─────────────────────────────────────────────────
+  // Guard: if supabase failed to init, show config error instead of crashing
+  if(!supabase)return(
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#0f0f13",fontFamily:"Georgia,serif",padding:20}}>
+      <div style={{textAlign:"center",maxWidth:400}}>
+        <div style={{fontSize:40,marginBottom:16}}>⚙️</div>
+        <div style={{color:"#ef4444",fontSize:16,fontWeight:700,marginBottom:8}}>Configuration Error</div>
+        <div style={{color:"#7a7590",fontSize:13,lineHeight:1.7}}>Missing Supabase environment variables.<br/>Please check that <code style={{background:"#1e1e2e",padding:"1px 6px",borderRadius:4}}>VITE_SUPABASE_URL</code> and <code style={{background:"#1e1e2e",padding:"1px 6px",borderRadius:4}}>VITE_SUPABASE_ANON</code> are set in Vercel and redeploy.</div>
+      </div>
+    </div>
+  );
+
   if(authLoading)return(
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#0f0f13",fontFamily:"Georgia,serif"}}>
       <div style={{textAlign:"center"}}><div style={{fontSize:40,marginBottom:16}}>🎓</div><div style={{color:"#7a7590",fontSize:14}}>Loading ProPlanner...</div></div>
