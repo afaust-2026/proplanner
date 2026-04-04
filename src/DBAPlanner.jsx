@@ -534,10 +534,10 @@ export default function ProPlanner(){
     if(!newAssign.title||!newAssign.due)return notify("Fill in title and due date.");
     const cid=newAssign.courseId||courses[0]?.id;
     if(!cid)return notify("Add a course first.");
-    const{data,error}=await supabase.from("assignments").insert({user_id:authUser.id,course_id:cid,title:newAssign.title,due_date:newAssign.due,type:newAssign.type,est_hours:newAssign.estHours,done:false,topics:"",flashcards:[]}).select().single();
+    const{data,error}=await supabase.from("assignments").insert({user_id:authUser.id,course_id:cid,title:newAssign.title,due_date:newAssign.due,type:newAssign.type,est_hours:newAssign.estHours,done:false,topics:newAssign.topics||"",flashcards:[]}).select().single();
     if(error)return notify("Error saving.");
     setAssignments(p=>[...p,{...data,courseId:data.course_id,due:data.due_date,estHours:data.est_hours,flashcards:[]}]);
-    setShowAddAssign(false);setNewAssign({courseId:courses[0]?.id||"",title:"",due:"",type:"",estHours:4});notify("Assignment added!");
+    setShowAddAssign(false);setNewAssign({courseId:courses[0]?.id||"",title:"",due:"",type:"",estHours:4,topics:""});notify("Assignment added!");
   }
 
   async function saveEditAssignment(){
@@ -712,7 +712,7 @@ Return ONLY the JSON object, nothing else.`}
         const text=await file.text();
         setUploadMsg("Analyzing with AI...");
         result=await callClaudeJSON(
-          `Parse this academic syllabus. Return ONLY valid JSON: {"courseName":"","professorName":"","difficulty":1-5,"assignments":[{"title":"","due":"YYYY-MM-DD","type":"paper|exam|case|homework|project|discussion","estHours":1,"topics":""}]}. Assume year ${new Date().getFullYear()}.`,
+          `Parse this academic syllabus. Return ONLY valid JSON: {"courseName":"","professorName":"","difficulty":1-5,"classDays":["Mon","Wed"],"classTime":"18:00","classEndTime":"20:00","assignments":[{"title":"","due":"YYYY-MM-DD","type":"paper|exam|case|homework|project|discussion","estHours":1,"topics":"key topics or description"}]}. classDays uses Mon/Tue/Wed/Thu/Fri/Sat/Sun. classTime 24hr format. Assume year ${new Date().getFullYear()}.`,
           text.slice(0,3500)
         );
       }
@@ -721,12 +721,16 @@ Return ONLY the JSON object, nothing else.`}
       let cid=courses.find(c=>c.name===result.courseName)?.id;
       if(!cid){
         const cols=["#6366f1","#0ea5e9","#ec4899","#10b981","#f59e0b","#8b5cf6"];
+        const classDays=(result.classDays||[]).filter(d=>["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].includes(d));
         const{data:cd,error:ce}=await supabase.from("courses").insert({
           user_id:authUser.id,
           name:result.courseName||"New Course",
           difficulty:result.difficulty||3,
           color:cols[courses.length%cols.length],
-          professor:result.professorName||""
+          professor:result.professorName||"",
+          class_days:classDays,
+          class_time:result.classTime||"",
+          class_end_time:result.classEndTime||"",
         }).select().single();
         if(ce)throw new Error(`Course save error: ${ce.message}`);
         if(cd){setCourses(p=>[...p,{...cd,rmpData:null}]);cid=cd.id;}
@@ -1089,15 +1093,15 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                         :`You have ${timeData.totalWk} committed hours this week. Make sure you're protecting time for sleep, meals, and recovery.`}
                     </div>
                     <div style={{display:"flex",gap:8,marginTop:8,flexWrap:"wrap"}}>
-                      <button className="bg2" style={{fontSize:11}} onClick={()=>sendChat("I have "+timeData.totalWk+" committed hours this week. What should I prioritize or cut back on?")}>Ask AI for Advice</button>
-                      <button className="bg2" style={{fontSize:11}} onClick={()=>setShowTimeTracker(true)}>View Time Breakdown</button>
+                      <button className="bg2" style={{fontSize:11}} onClick={()=>{setChatOpen(true);setTimeout(()=>sendChat("I have "+timeData.totalWk+" committed hours this week. What should I prioritize or cut back on?"),300);}}>Ask AI for Advice</button>
+                      <button className="bg2" style={{fontSize:11}} onClick={()=>{setView("dashboard");setShowTimeTracker(true);setTimeout(()=>document.getElementById("time-tracker")?.scrollIntoView({behavior:"smooth"}),100);}}>View Time Breakdown</button>
                     </div>
                   </div>
                 </div>
               )}
 
               {/* ── TIME TRACKER WIDGET ── */}
-              <div className="card" style={{marginBottom:14,cursor:"pointer"}} onClick={()=>setShowTimeTracker(s=>!s)}>
+              <div id="time-tracker" className="card" style={{marginBottom:14,cursor:"pointer"}} onClick={()=>setShowTimeTracker(s=>!s)}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
                   <div>
                     <div style={{fontSize:10,letterSpacing:2,color:T.accent,textTransform:"uppercase",marginBottom:2}}>Weekly Time Overview</div>
@@ -1347,6 +1351,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                       <input type="checkbox" checked={a.done} onChange={()=>toggleDone(a.id)} style={{width:15,height:15,accentColor:course.color,cursor:"pointer"}}/>
                       <div style={{flex:1}}>
                         <div style={{fontWeight:600,textDecoration:a.done?"line-through":"none",fontSize:13}}>{a.title}</div>
+                        {a.topics&&<div style={{fontSize:11,color:T.muted,marginTop:2,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:320}}>{a.topics}</div>}
                         <div style={{fontSize:10,color:T.muted,marginTop:2}}>
                           <span className="tag" style={{background:course.color+"22",color:course.color,marginRight:6}}>{a.type}</span>
                           Est. {a.estHours}h · {sh}h study
@@ -1390,7 +1395,35 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                       <button className="del-btn" onClick={()=>deleteCourse(c.id)}>Drop 🗑</button>
                     </div>
                     {c.professor&&<div style={{fontSize:11,color:T.muted,marginBottom:4}}>👤 {c.professor}</div>}
-                    {c.class_days?.length>0&&<div style={{fontSize:11,color:T.muted,marginBottom:8}}>🗓 {c.class_days.join(", ")} {c.class_time&&`· ${c.class_time}`}{c.class_end_time&&` – ${c.class_end_time}`}</div>}
+                    <div style={{marginBottom:8}}>
+                      {c.class_days?.length>0
+                        ?<div style={{fontSize:11,color:T.muted,display:"flex",alignItems:"center",gap:6}}>🗓 {c.class_days.join(", ")} {c.class_time&&`· ${c.class_time}`}{c.class_end_time&&` – ${c.class_end_time}`}
+                          <button onClick={()=>setCourses(p=>p.map(x=>x.id===c.id?{...x,_editSched:!x._editSched}:x))} style={{fontSize:10,color:T.accent,background:"transparent",border:"none",cursor:"pointer",padding:0}}>edit</button>
+                        </div>
+                        :<button onClick={()=>setCourses(p=>p.map(x=>x.id===c.id?{...x,_editSched:true}:x))} style={{fontSize:11,color:T.accent,background:"transparent",border:`1px dashed ${T.border2}`,borderRadius:6,padding:"2px 8px",cursor:"pointer",fontFamily:"inherit"}}>+ Add class schedule</button>
+                      }
+                      {c._editSched&&(
+                        <div style={{marginTop:8,padding:"10px 12px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`}}>
+                          <div style={{fontSize:11,color:T.muted,marginBottom:6}}>Which days does this class meet?</div>
+                          <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:8}}>
+                            {DAYS_SHORT.map(d=>{const sel=(c.class_days||[]).includes(d);return(
+                              <button key={d} type="button" onClick={()=>{const cur=c.class_days||[];const updated=sel?cur.filter(x=>x!==d):[...cur,d];setCourses(p=>p.map(x=>x.id===c.id?{...x,class_days:updated}:x));}} style={{padding:"4px 9px",borderRadius:6,border:`2px solid ${sel?T.accent:T.border2}`,background:sel?`rgba(${hexToRgb(T.accent)},.12)`:"transparent",color:sel?T.accent:T.muted,fontSize:11,fontWeight:sel?700:400,cursor:"pointer",fontFamily:"inherit"}}>
+                                {d}
+                              </button>
+                            );})}
+                          </div>
+                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7,marginBottom:8}}>
+                            <div><div style={{fontSize:10,color:T.muted,marginBottom:2}}>Start time</div><input type="time" className="ifield" value={c.class_time||""} onChange={e=>setCourses(p=>p.map(x=>x.id===c.id?{...x,class_time:e.target.value}:x))} style={{fontSize:11,padding:"4px 7px"}}/></div>
+                            <div><div style={{fontSize:10,color:T.muted,marginBottom:2}}>End time</div><input type="time" className="ifield" value={c.class_end_time||""} onChange={e=>setCourses(p=>p.map(x=>x.id===c.id?{...x,class_end_time:e.target.value}:x))} style={{fontSize:11,padding:"4px 7px"}}/></div>
+                          </div>
+                          <button className="bp" style={{fontSize:11,width:"100%"}} onClick={async()=>{
+                            await supabase.from("courses").update({class_days:c.class_days||[],class_time:c.class_time||"",class_end_time:c.class_end_time||""}).eq("id",c.id);
+                            setCourses(p=>p.map(x=>x.id===c.id?{...x,_editSched:false}:x));
+                            notify("Class schedule saved!");
+                          }}>Save Schedule</button>
+                        </div>
+                      )}
+                    </div>
                     {rmp?(
                       <div style={{background:T.subcard,borderRadius:8,padding:"8px 10px",marginBottom:8,border:`1px solid ${T.border2}`}}>
                         <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
@@ -1406,9 +1439,8 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                       </div>
                     ):(
                       <div style={{marginBottom:8}}>
-                        <div style={{display:"flex",gap:5,marginBottom:5}}>
-                          <input className="ifield" placeholder="Professor name..." value={c.professor||""} onChange={e=>setCourses(p=>p.map(x=>x.id===c.id?{...x,professor:e.target.value}:x))} style={{flex:1,fontSize:11,padding:"5px 8px"}}/>
-                          <button className="bg2" style={{fontSize:11,whiteSpace:"nowrap"}} onClick={()=>handleRmpSearch(c.id,c.professor||"")}>{rmpSearching[c.id]?"...":"Search RMP"}</button>
+                        <div style={{marginBottom:5}}>
+                          <input className="ifield" placeholder="Professor name..." value={c.professor||""} onChange={e=>setCourses(p=>p.map(x=>x.id===c.id?{...x,professor:e.target.value}:x))} style={{fontSize:11,padding:"5px 8px"}}/>
                         </div>
                         <button className="bg2" style={{width:"100%",fontSize:11}} onClick={()=>window.open(`https://www.ratemyprofessors.com/search/professors?q=${encodeURIComponent((c.professor||c.name)+" "+uni.abbr)}`,"_blank")}>🔗 Open RateMyProfessors.com</button>
                         {rmpResults[c.id]&&rmpResults[c.id]!=="notfound"&&rmpResults[c.id].length>0&&(
@@ -1785,6 +1817,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
             </div>
           </div>
           <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Estimated Hours: {newAssign.estHours}</div><input type="range" min={1} max={30} value={newAssign.estHours} onChange={e=>setNewAssign(a=>({...a,estHours:+e.target.value}))} style={{width:"100%",accentColor:T.accent}}/></div>
+          <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Description / Notes <span style={{color:T.faint}}>(optional)</span></div><textarea className="ifield" rows={2} placeholder="Key topics, requirements, what to focus on..." value={newAssign.topics||""} onChange={e=>setNewAssign(a=>({...a,topics:e.target.value}))} style={{resize:"vertical",fontSize:12}}/></div>
           <div style={{display:"flex",gap:8,marginTop:4}}><button className="bg2" style={{flex:1}} onClick={()=>setShowAddAssign(false)}>Cancel</button><button className="bp" style={{flex:1}} onClick={addAssignment}>Add Assignment</button></div>
         </div>
       </div></div>)}
