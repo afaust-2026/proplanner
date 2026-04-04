@@ -268,6 +268,13 @@ export default function ProPlanner(){
   const[view,setView]=useState("dashboard");
   const[dark,setDark]=useState(()=>window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);
   const[sidebarOpen,setSidebar]=useState(true);
+  const[isMobile,setIsMobile]=useState(()=>typeof window!=="undefined"&&window.innerWidth<=768);
+  useEffect(()=>{
+    function handleResize(){const mobile=window.innerWidth<=768;setIsMobile(mobile);if(mobile)setSidebar(false);}
+    handleResize();
+    window.addEventListener("resize",handleResize);
+    return()=>window.removeEventListener("resize",handleResize);
+  },[]);
   const[chatOpen,setChatOpen]=useState(false);
 
   // Data state — all loaded from Supabase per user
@@ -297,7 +304,7 @@ export default function ProPlanner(){
   const[uploading,setUploading]=useState(false);
   const[uploadMsg,setUploadMsg]=useState("");
   const[notification,setNotification]=useState("");
-  const[newAssign,setNewAssign]=useState({courseId:"",title:"",due:"",type:"paper",estHours:4});
+  const[newAssign,setNewAssign]=useState({courseId:"",title:"",due:"",type:"",estHours:4});
   const[newCourse,setNewCourse]=useState({name:"",difficulty:3,color:"#6366f1",professor:""});
   const[newMilestone,setNewMilestone]=useState({title:"",due:"",notes:""});
   const[newTravel,setNewTravel]=useState({start:"",end:"",label:""});
@@ -492,7 +499,7 @@ export default function ProPlanner(){
     const{data,error}=await supabase.from("assignments").insert({user_id:authUser.id,course_id:cid,title:newAssign.title,due_date:newAssign.due,type:newAssign.type,est_hours:newAssign.estHours,done:false,topics:"",flashcards:[]}).select().single();
     if(error)return notify("Error saving.");
     setAssignments(p=>[...p,{...data,courseId:data.course_id,due:data.due_date,estHours:data.est_hours,flashcards:[]}]);
-    setShowAddAssign(false);setNewAssign({courseId:courses[0]?.id||"",title:"",due:"",type:"paper",estHours:4});notify("Assignment added!");
+    setShowAddAssign(false);setNewAssign({courseId:courses[0]?.id||"",title:"",due:"",type:"",estHours:4});notify("Assignment added!");
   }
 
   async function deleteAssignment(id){
@@ -803,8 +810,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
     .prog-fill{height:100%;border-radius:4px;transition:width .4s;}
     .del-btn{background:transparent;border:1px solid ${T.border2};border-radius:6px;padding:3px 8px;font-size:11px;color:${T.danger};cursor:pointer;transition:all .2s;}.del-btn:hover{background:rgba(239,68,68,.08);border-color:${T.danger};}
     @media(max-width:768px){
-      aside{position:fixed!important;top:0;left:0;bottom:0;z-index:100;box-shadow:4px 0 20px rgba(0,0,0,.3);}
-      main{padding:14px 16px!important;}
+      .main-content{padding:14px 16px!important;}
     }
     .stat-card:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(${rgb},.2);cursor:pointer;}
     .stat-card{transition:transform .2s,box-shadow .2s;}
@@ -854,8 +860,9 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
 
         {/* ═══ SIDEBAR ═══ */}
         {/* Mobile overlay */}
-        {sidebarOpen&&<div onClick={()=>setSidebar(false)} style={{display:"none","@media(max-width:768px)":{display:"block"},position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:99}}/>}
-        <aside style={{width:sidebarOpen?226:58,background:T.sidebar,borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",flexShrink:0,overflow:"hidden",transition:"width .25s ease",position:"relative",zIndex:100}}>
+        {/* Mobile overlay — closes sidebar when tapping outside */}
+        {isMobile&&sidebarOpen&&<div onClick={()=>setSidebar(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:99}}/>}
+        <aside style={{width:sidebarOpen?240:0,minWidth:sidebarOpen?240:0,background:T.sidebar,borderRight:sidebarOpen?`1px solid ${T.border}`:"none",display:"flex",flexDirection:"column",flexShrink:0,overflow:"hidden",transition:"width .25s ease,min-width .25s ease",position:isMobile?"fixed":"relative",top:isMobile?0:"auto",left:isMobile?0:"auto",bottom:isMobile?0:"auto",zIndex:isMobile?100:"auto",boxShadow:isMobile&&sidebarOpen?"4px 0 24px rgba(0,0,0,.4)":"none"}}>
           <div style={{padding:"14px 9px 12px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:sidebarOpen?"space-between":"center",background:`linear-gradient(135deg,rgba(${rgb},.12),rgba(${rgb},.04))`}}>
             {sidebarOpen&&<div style={{overflow:"hidden",marginRight:5}}>
               <div style={{fontSize:9,letterSpacing:3,color:T.accent,textTransform:"uppercase",fontWeight:700,whiteSpace:"nowrap"}}>{uni.abbr} · {profile.full_name?.split(" ")[0]}</div>
@@ -867,7 +874,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
             {NAV.map(item=>{
               const badge=item.id==="assignments"?overdue.length:item.id==="calendar"&&todayStudy.length>0?todayStudy.length:0;
               return(
-              <button key={item.id} onClick={()=>setView(item.id)} title={item.label} className="nb" style={{background:view===item.id?`rgba(${rgb},.12)`:"transparent",border:`1px solid ${view===item.id?T.accent:"transparent"}`,color:view===item.id?T.accent:T.muted,justifyContent:sidebarOpen?"flex-start":"center",position:"relative"}}>
+              <button key={item.id} onClick={()=>{setView(item.id);if(isMobile)setSidebar(false);}} title={item.label} className="nb" style={{background:view===item.id?`rgba(${rgb},.12)`:"transparent",border:`1px solid ${view===item.id?T.accent:"transparent"}`,color:view===item.id?T.accent:T.muted,justifyContent:sidebarOpen?"flex-start":"center",position:"relative"}}>
                 <span style={{fontSize:16,flexShrink:0}}>{item.icon}</span>
                 {sidebarOpen&&<span style={{whiteSpace:"nowrap",overflow:"hidden",flex:1}}>{item.label}</span>}
                 {badge>0&&<span style={{background:T.danger,color:"#fff",borderRadius:10,fontSize:9,fontWeight:700,padding:"1px 5px",minWidth:16,textAlign:"center",flexShrink:0}}>{badge}</span>}
@@ -901,7 +908,15 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
         </aside>
 
         {/* ═══ MAIN CONTENT ═══ */}
-        <main style={{flex:1,overflowY:"auto",padding:"22px 26px",minWidth:0}}>
+        <main className="main-content" style={{flex:1,overflowY:"auto",padding:"22px 26px",minWidth:0,position:"relative"}}>
+          {/* Hamburger button — only visible on mobile when sidebar is closed */}
+          {isMobile&&!sidebarOpen&&(
+            <button onClick={()=>setSidebar(true)} style={{position:"fixed",top:12,left:12,zIndex:98,background:T.accent,color:"#fff",border:"none",borderRadius:9,width:40,height:40,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,cursor:"pointer",boxShadow:"0 2px 12px rgba(0,0,0,.3)"}}>
+              <div style={{width:16,height:2,background:"#fff",borderRadius:2}}/>
+              <div style={{width:16,height:2,background:"#fff",borderRadius:2}}/>
+              <div style={{width:16,height:2,background:"#fff",borderRadius:2}}/>
+            </button>
+          )}
 
           {/* ── DASHBOARD ── */}
           {view==="dashboard"&&(
@@ -1053,14 +1068,30 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                   <button className="bp" onClick={()=>setShowAddAssign(true)}>+ Add</button>
                 </div>
               </div>
-              {courses.length===0&&(
-                <div style={{textAlign:"center",padding:"40px 20px",color:T.muted}}>
-                  <div style={{fontSize:48,marginBottom:14}}>📚</div>
-                  <div style={{fontWeight:700,fontSize:16,marginBottom:8,color:T.text}}>No assignments yet</div>
-                  <div style={{fontSize:13,marginBottom:20,lineHeight:1.6}}>Upload a syllabus and ProPlanner will automatically extract all your assignments, due dates, and topics.</div>
+              {courses.length===0&&assignments.length===0&&(
+                <div style={{textAlign:"center",padding:"48px 24px",color:T.muted,maxWidth:440,margin:"0 auto"}}>
+                  <div style={{fontSize:56,marginBottom:16}}>📚</div>
+                  <div style={{fontWeight:700,fontSize:18,marginBottom:10,color:T.text}}>No assignments yet</div>
+                  <div style={{fontSize:13,marginBottom:24,lineHeight:1.7,color:T.muted}}>
+                    Upload a syllabus and ProPlanner will automatically extract all your assignments, due dates, and estimated study hours — no manual entry needed.
+                  </div>
+                  <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap",marginBottom:16}}>
+                    <label style={{cursor:"pointer"}}><input type="file" accept=".txt,.pdf,.docx" onChange={handleSyllabusUpload} style={{display:"none"}}/><span className="bp" style={{display:"inline-block",padding:"10px 20px",fontSize:13}}>📄 Upload Syllabus</span></label>
+                    <button className="bg2" style={{fontSize:13,padding:"10px 18px"}} onClick={()=>{setShowAddCourse(true);}}>+ Add Course First</button>
+                  </div>
+                  <div style={{fontSize:11,color:T.faint}}>Supports PDF, .txt, and Word documents</div>
+                </div>
+              )}
+              {courses.length>0&&assignments.length===0&&(
+                <div style={{textAlign:"center",padding:"48px 24px",color:T.muted,maxWidth:440,margin:"0 auto"}}>
+                  <div style={{fontSize:56,marginBottom:16}}>📝</div>
+                  <div style={{fontWeight:700,fontSize:18,marginBottom:10,color:T.text}}>No assignments yet</div>
+                  <div style={{fontSize:13,marginBottom:24,lineHeight:1.7,color:T.muted}}>
+                    You have courses set up. Now add assignments manually or upload a syllabus to import them automatically.
+                  </div>
                   <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
-                    <label style={{cursor:"pointer"}}><input type="file" accept=".txt,.pdf,.docx" onChange={handleSyllabusUpload} style={{display:"none"}}/><span className="bp" style={{display:"inline-block",padding:"9px 18px"}}>📄 Upload Syllabus</span></label>
-                    <button className="bg2" onClick={()=>setShowAddCourse(true)}>+ Add Course Manually</button>
+                    <label style={{cursor:"pointer"}}><input type="file" accept=".txt,.pdf,.docx" onChange={handleSyllabusUpload} style={{display:"none"}}/><span className="bp" style={{display:"inline-block",padding:"10px 20px",fontSize:13}}>📄 Upload Syllabus</span></label>
+                    <button className="bp" style={{fontSize:13,padding:"10px 20px",background:"transparent",border:`1px solid ${T.accent}`,color:T.accent}} onClick={()=>setShowAddAssign(true)}>+ Add Assignment</button>
                   </div>
                 </div>
               )}
@@ -1150,7 +1181,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                             ))}
                           </div>
                         )}
-                        {rmpResults[c.id]==="notfound"&&<div style={{marginTop:4,fontSize:11,color:T.warning,padding:"4px 8px",background:"rgba(245,158,11,.08)",borderRadius:6}}>Search blocked by browser security. Use the direct link above to find your professor, then manually enter their difficulty rating below.</div>}
+                        {rmpResults[c.id]==="notfound"&&<div style={{marginTop:4,fontSize:11,color:T.muted,padding:"8px 10px",background:T.subcard,borderRadius:7,border:`1px solid ${T.border2}`,lineHeight:1.5}}>ℹ️ Automatic search is not available in browsers. Use the <strong>Open RateMyProfessors.com</strong> button above to find your professor, then come back and enter their name here.</div>}
                       </div>
                     )}
                     <div className="prog-bar" style={{marginBottom:5}}><div className="prog-fill" style={{width:`${pct}%`,background:c.color}}/></div>
@@ -1508,7 +1539,8 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
             <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Due Date</div><input type="date" className="ifield" value={newAssign.due} onChange={e=>setNewAssign(a=>({...a,due:e.target.value}))}/></div>
             <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Type</div>
               <select className="ifield" value={newAssign.type} onChange={e=>setNewAssign(a=>({...a,type:e.target.value}))}>
-                {["paper","exam","case","homework","project","discussion"].map(tp=><option key={tp}>{tp}</option>)}
+                <option value="" disabled hidden>Select type...</option>
+                {["Paper","Exam","Case Study","Homework","Project","Discussion","Presentation","Lab","Quiz"].map(tp=><option key={tp} value={tp.toLowerCase().replace(" ","")}>{tp}</option>)}
               </select>
             </div>
           </div>
