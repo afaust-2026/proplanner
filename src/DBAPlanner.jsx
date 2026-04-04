@@ -94,7 +94,7 @@ function AuthScreen({onAuth}){
   }
   const inp={width:"100%",background:"#0f0f13",border:"1px solid #2a2a38",borderRadius:8,padding:"10px 13px",color:"#e8e3d8",fontSize:14,outline:"none",fontFamily:"inherit",marginBottom:2};
   return(
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#0f0f13 0%,#1a1a2e 100%)",fontFamily:"Georgia,serif"}}>
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#0f0f13 0%,#1a1a2e 100%)",fontFamily:"'Inter',system-ui,sans-serif"}}>
       <div style={{width:"min(90vw,420px)",padding:"40px 36px",background:"#16161f",borderRadius:20,border:"1px solid #2a2a38",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
         <div style={{textAlign:"center",marginBottom:30}}>
           <div style={{fontSize:44,marginBottom:10}}>🎓</div>
@@ -136,7 +136,7 @@ function Onboarding({user,onComplete}){
     else{alert("Error saving profile. Please try again.");setSaving(false);}
   }
   const wrap=ch=>(
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#0f0f13,#1a1a2e)",fontFamily:"Georgia,serif",padding:16}}>
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#0f0f13,#1a1a2e)",fontFamily:"'Inter',system-ui,sans-serif",padding:16}}>
       <div style={{width:"min(92vw,500px)",padding:"36px 30px",background:"#16161f",borderRadius:20,border:"1px solid #2a2a38",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
         <div style={{display:"flex",gap:5,justifyContent:"center",marginBottom:26}}>
           {Array.from({length:TOTAL}).map((_,i)=><div key={i} style={{width:i+1===step?20:7,height:7,borderRadius:4,background:i+1<=step?"#6366f1":"#2a2a38",transition:"all .3s"}}/>)}
@@ -281,6 +281,9 @@ export default function ProPlanner(){
   const[courses,setCourses]=useState([]);
   const[assignments,setAssignments]=useState([]);
   const[studyBlocks,setStudyBlocks]=useState([]);
+  const[completedStudy,setCompletedStudy]=useState({}); // {blockId: true}
+  const[showTimeTracker,setShowTimeTracker]=useState(false);
+  const[trackerCategory,setTrackerCategory]=useState(null); // drill-down category
   const[milestones,setMilestones]=useState([]);
   const[scheduleBlocks,setScheduleBlocks]=useState([]);  // practice, greek, work events
   const[travelDates,setTravelDates]=useState([]);
@@ -305,7 +308,8 @@ export default function ProPlanner(){
   const[uploadMsg,setUploadMsg]=useState("");
   const[notification,setNotification]=useState("");
   const[newAssign,setNewAssign]=useState({courseId:"",title:"",due:"",type:"",estHours:4});
-  const[newCourse,setNewCourse]=useState({name:"",difficulty:3,color:"#6366f1",professor:""});
+  const[editAssign,setEditAssign]=useState(null); // holds assignment being edited
+  const[newCourse,setNewCourse]=useState({name:"",difficulty:3,color:"#6366f1",professor:"",class_days:[],class_time:"",class_end_time:""});
   const[newMilestone,setNewMilestone]=useState({title:"",due:"",notes:""});
   const[newTravel,setNewTravel]=useState({start:"",end:"",label:""});
   const[newBlock,setNewBlock]=useState({label:"",block_type:"sport",days_of_week:["Mon"],start_time:"15:00",end_time:"17:00",date_specific:""});
@@ -455,6 +459,14 @@ export default function ProPlanner(){
         const alreadyOnDay=dailyCount[dateStr]||0;
         // Place a block if: day is available, this assignment not already on this day, max 2 sessions per day
         if(win.available&&!blocks.find(b=>b.date===dateStr&&b.assignId===assign.id)&&alreadyOnDay<2){
+          // Assign a real start time based on the window
+          let studyStart="18:00";
+          if(win.slot.includes("Morning"))studyStart="08:00";
+          else if(win.slot.includes("All day"))studyStart="09:00";
+          else if(win.slot.includes("After ")){const h=win.slot.match(/After (\d+)/);if(h)studyStart=`${String(parseInt(h[1])+1).padStart(2,"0")}:00`;}
+          else if(win.slot.includes("Evening after ")){const h=win.slot.match(/after (\d+)/i);if(h)studyStart=`${String(parseInt(h[1])+1).padStart(2,"0")}:00`;}
+          const studyEndH=parseInt(studyStart.split(":")[0])+2;
+          const studyEnd=`${String(studyEndH).padStart(2,"0")}:00`;
           blocks.push({
             id:`${assign.id}-${dateStr}`,
             assignId:assign.id,
@@ -462,8 +474,11 @@ export default function ProPlanner(){
             title:`Study: ${assign.title}`,
             date:dateStr,
             slot:win.slot,
+            startTime:studyStart,
+            endTime:studyEnd,
             hours:2,
             color:course?.color||T.accent,
+            completed:false,
           });
           dailyCount[dateStr]=(dailyCount[dateStr]||0)+1;
           placed++;
@@ -474,13 +489,30 @@ export default function ProPlanner(){
     setStudyBlocks(blocks);
   }
 
+  function toggleStudyComplete(blockId){
+    const wasComplete=completedStudy[blockId];
+    const updated={...completedStudy,[blockId]:!wasComplete};
+    setCompletedStudy(updated);
+    const block=studyBlocks.find(b=>b.id===blockId);
+    if(block&&!wasComplete){
+      const totalDoneHrs=Object.keys(updated).filter(k=>updated[k]).length*2;
+      if(totalDoneHrs>=6){
+        notify("🌿 Great work! You've studied "+totalDoneHrs+"h today. Remember to take a break, eat something, and move around.");
+      } else if(totalDoneHrs>=4){
+        notify("✓ "+totalDoneHrs+"h done! Consider a 15-min break to stay sharp.");
+      } else {
+        notify(`✓ Study session complete! (+${block.hours}h)`);
+      }
+    }
+  }
+
   // ── CRUD — all saved to Supabase ───────────────────────────────────────────
   async function addCourse(){
     if(!newCourse.name)return notify("Enter a course name.");
-    const{data,error}=await supabase.from("courses").insert({user_id:authUser.id,name:newCourse.name,difficulty:newCourse.difficulty,color:newCourse.color,professor:newCourse.professor||""}).select().single();
+    const{data,error}=await supabase.from("courses").insert({user_id:authUser.id,name:newCourse.name,difficulty:newCourse.difficulty,color:newCourse.color,professor:newCourse.professor||"",class_days:newCourse.class_days||[],class_time:newCourse.class_time||"",class_end_time:newCourse.class_end_time||""}).select().single();
     if(error)return notify("Error saving course.");
     setCourses(p=>[...p,{...data,rmpData:null}]);
-    setShowAddCourse(false);setNewCourse({name:"",difficulty:3,color:"#6366f1",professor:""});notify("Course added!");
+    setShowAddCourse(false);setNewCourse({name:"",difficulty:3,color:"#6366f1",professor:"",class_days:[],class_time:"",class_end_time:""});notify("Course added!");
   }
 
   function deleteCourse(id){
@@ -506,6 +538,21 @@ export default function ProPlanner(){
     if(error)return notify("Error saving.");
     setAssignments(p=>[...p,{...data,courseId:data.course_id,due:data.due_date,estHours:data.est_hours,flashcards:[]}]);
     setShowAddAssign(false);setNewAssign({courseId:courses[0]?.id||"",title:"",due:"",type:"",estHours:4});notify("Assignment added!");
+  }
+
+  async function saveEditAssignment(){
+    if(!editAssign?.title||!editAssign?.due)return notify("Title and due date are required.");
+    const{error}=await supabase.from("assignments").update({
+      title:editAssign.title,
+      due_date:editAssign.due,
+      type:editAssign.type,
+      est_hours:editAssign.estHours,
+      course_id:editAssign.courseId,
+      topics:editAssign.topics||"",
+    }).eq("id",editAssign.id);
+    if(error)return notify("Error saving changes.");
+    setAssignments(p=>p.map(a=>a.id===editAssign.id?{...a,...editAssign,due:editAssign.due,estHours:editAssign.estHours,courseId:editAssign.courseId}:a));
+    setEditAssign(null);notify("Assignment updated!");
   }
 
   function deleteAssignment(id){
@@ -775,12 +822,85 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
   // ── Calendar ───────────────────────────────────────────────────────────────
   function getEventsForDay(y,m,d){
     const k=dateKey(y,m,d);const dayName=DAYS_SHORT[new Date(y,m,d).getDay()];
-    return{asgn:assignments.filter(a=>a.due===k),study:studyBlocks.filter(b=>b.date===k),travel:travelDates.find(tr=>k>=tr.start&&k<=tr.end),milestone:milestones.find(ms=>ms.due===k),blocks:scheduleBlocks.filter(b=>b.day_of_week===dayName||b.date_specific===k)};
+    // Find courses that meet on this day
+    const classTimes=courses.filter(c=>(c.class_days||[]).includes(dayName)&&c.class_time);
+    return{
+      asgn:assignments.filter(a=>a.due===k),
+      study:studyBlocks.filter(b=>b.date===k),
+      travel:travelDates.find(tr=>k>=tr.start&&k<=tr.end),
+      milestone:milestones.find(ms=>ms.due===k),
+      blocks:scheduleBlocks.filter(b=>b.day_of_week===dayName||b.date_specific===k),
+      classes:classTimes,
+    };
   }
   function prevMonth(){calMonth===0?(setCalYear(y=>y-1),setCalMonth(11)):setCalMonth(m=>m-1);}
   function nextMonth(){calMonth===11?(setCalYear(y=>y+1),setCalMonth(0)):setCalMonth(m=>m+1);}
 
   // ── Derived values ─────────────────────────────────────────────────────────
+  // ── Time tracker calculations ──────────────────────────────────────────────
+  const timeData=(() => {
+    // Study hours: completed sessions
+    const studyDone=Object.keys(completedStudy).filter(k=>completedStudy[k]).length*2;
+    // Study scheduled (upcoming, not yet done)
+    const studySched=studyBlocks.filter(b=>!completedStudy[b.id]&&daysUntil(b.date)>=0).length*2;
+
+    // Class hours per week: sum all courses' class durations * days per week
+    const classHrsWk=courses.reduce((sum,c)=>{
+      if(!c.class_days?.length||!c.class_time)return sum;
+      const start=parseInt((c.class_time||"09:00").split(":")[0]);
+      const end=parseInt((c.class_end_time||"10:30").split(":")[0]);
+      return sum+(Math.max(1,end-start)*c.class_days.length);
+    },0);
+
+    // Work hours per week
+    const workHrsWk=Object.values(workSched).filter(d=>d.work).reduce((sum,d)=>{
+      const s=parseInt((d.start||"08:00").split(":")[0]);
+      const e=parseInt((d.end||"17:00").split(":")[0]);
+      return sum+Math.max(0,e-s);
+    },0);
+
+    // Sports hours per week
+    const sportsHrsWk=scheduleBlocks.filter(b=>b.block_type==="sport").reduce((sum,b)=>{
+      const s=parseInt((b.start_time||"15:00").split(":")[0]);
+      const e=parseInt((b.end_time||"17:00").split(":")[0]);
+      return sum+Math.max(0,e-s);
+    },0);
+
+    // Greek life hours per week
+    const greekHrsWk=scheduleBlocks.filter(b=>b.block_type==="greek").reduce((sum,b)=>{
+      const s=parseInt((b.start_time||"18:00").split(":")[0]);
+      const e=parseInt((b.end_time||"20:00").split(":")[0]);
+      return sum+Math.max(0,e-s);
+    },0);
+
+    // Other blocks
+    const otherHrsWk=scheduleBlocks.filter(b=>b.block_type==="other"||b.block_type==="work").reduce((sum,b)=>{
+      const s=parseInt((b.start_time||"09:00").split(":")[0]);
+      const e=parseInt((b.end_time||"10:00").split(":")[0]);
+      return sum+Math.max(0,e-s);
+    },0);
+
+    const totalWk=classHrsWk+studySched+workHrsWk+sportsHrsWk+greekHrsWk+otherHrsWk;
+    const freeHrs=Math.max(0,112-totalWk); // 16 waking hrs/day * 7 = 112
+
+    // Wellness check: if total committed hrs > 80/wk, suggest a break
+    const overloaded=totalWk>80;
+    const strained=totalWk>65&&totalWk<=80;
+
+    return{
+      studyDone,studySched,classHrsWk,workHrsWk,sportsHrsWk,greekHrsWk,otherHrsWk,totalWk,freeHrs,overloaded,strained,
+      breakdown:[
+        {label:"Classes",hrs:classHrsWk,color:"#10b981",icon:"🎓",detail:courses.filter(c=>c.class_days?.length>0).map(c=>`${c.name}: ${c.class_days?.join(",")} ${c.class_time||""}`)},
+        {label:"Studying",hrs:studySched,color:"#0ea5e9",icon:"📚",detail:assignments.filter(a=>!a.done).slice(0,5).map(a=>`${a.title}: ${studyBlocks.filter(b=>b.assignId===a.id).length*2}h planned`)},
+        {label:"Work",hrs:workHrsWk,color:"#f59e0b",icon:"💼",detail:Object.entries(workSched).filter(([,v])=>v.work).map(([day,v])=>`${day}: ${v.start}–${v.end}`)},
+        {label:"Sports",hrs:sportsHrsWk,color:"#ef4444",icon:"🏅",detail:scheduleBlocks.filter(b=>b.block_type==="sport").map(b=>`${b.label}: ${b.day_of_week} ${b.start_time}–${b.end_time}`)},
+        {label:"Greek Life",hrs:greekHrsWk,color:"#8b5cf6",icon:"🏛",detail:scheduleBlocks.filter(b=>b.block_type==="greek").map(b=>`${b.label}: ${b.day_of_week} ${b.start_time}–${b.end_time}`)},
+        {label:"Other",hrs:otherHrsWk,color:"#6366f1",icon:"📌",detail:scheduleBlocks.filter(b=>b.block_type==="other").map(b=>`${b.label}: ${b.day_of_week}`)},
+        {label:"Free Time",hrs:freeHrs,color:"#22c55e",icon:"😊",detail:["Time for rest, hobbies, and personal wellness"]},
+      ].filter(x=>x.hrs>0),
+    };
+  })();
+
   const upcoming=assignments.filter(a=>!a.done).sort((a,b)=>new Date(a.due)-new Date(b.due)).slice(0,5);
   const overdue=assignments.filter(a=>!a.done&&daysUntil(a.due)<0);
   const todayStudy=studyBlocks.filter(b=>b.date===dateKey(t.year,t.month,t.day));
@@ -803,7 +923,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
   const css=`
     *{box-sizing:border-box;margin:0;padding:0;}
     ::-webkit-scrollbar{width:5px;}::-webkit-scrollbar-thumb{background:${T.scrollThumb};border-radius:3px;}
-    input,select,textarea{font-family:inherit;}button{cursor:pointer;font-family:inherit;}
+    body,input,select,textarea{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;}button{cursor:pointer;font-family:inherit;}
     .fi{animation:fi .25s ease;}@keyframes fi{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
     .card{background:${T.card};border:1px solid ${T.border};border-radius:12px;padding:18px;transition:background .25s,border .25s;}
     .bp{background:${T.accent};color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;transition:all .2s;}.bp:hover{filter:brightness(1.1);}
@@ -832,7 +952,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
   // ── Auth / onboarding gates ─────────────────────────────────────────────────
   // Guard: if supabase failed to init, show config error instead of crashing
   if(!supabase)return(
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#0f0f13",fontFamily:"Georgia,serif",padding:20}}>
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#0f0f13",fontFamily:"'Inter',system-ui,sans-serif",padding:20}}>
       <div style={{textAlign:"center",maxWidth:400}}>
         <div style={{fontSize:40,marginBottom:16}}>⚙️</div>
         <div style={{color:"#ef4444",fontSize:16,fontWeight:700,marginBottom:8}}>Configuration Error</div>
@@ -842,7 +962,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
   );
 
   if(authLoading)return(
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#0f0f13",fontFamily:"Georgia,serif"}}>
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#0f0f13",fontFamily:"'Inter',system-ui,sans-serif"}}>
       <div style={{textAlign:"center"}}><div style={{fontSize:40,marginBottom:16}}>🎓</div><div style={{color:"#7a7590",fontSize:14}}>Loading ProPlanner...</div></div>
     </div>
   );
@@ -863,7 +983,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
 
   // ─── MAIN APP RENDER ───────────────────────────────────────────────────────
   return(
-    <div style={{fontFamily:"'Georgia','Times New Roman',serif",height:"100vh",display:"flex",flexDirection:"column",background:T.bg,color:T.text,transition:"background .25s,color .25s"}}>
+    <div style={{fontFamily:"'Inter','Plus Jakarta Sans',system-ui,sans-serif",height:"100vh",display:"flex",flexDirection:"column",background:T.bg,color:T.text,transition:"background .25s,color .25s"}}>
       <style>{css}</style>
 
       {/* Toast notification */}
@@ -948,13 +1068,94 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                 </div>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:10,marginBottom:14}}>
-                {[{l:"Courses",v:courses.length,c:T.accent,nav:"courses"},{l:"Pending",v:assignments.filter(a=>!a.done).length,c:T.warning,nav:"assignments"},{l:"Study Hrs/Wk",v:studyBlocks.filter(b=>{const d=new Date(b.date),n=new Date();return d>=n&&(d-n)<7*86400000;}).length*2,c:"#0ea5e9",nav:"calendar"},{l:"Milestones",v:milestones.filter(m=>!m.done).length,c:"#a78bfa",nav:"dissertation"},{l:"Done",v:assignments.filter(a=>a.done).length,c:T.success,nav:"assignments"}].map(s=>(
+                {[{l:"Courses",v:courses.length,c:T.accent,nav:"courses"},{l:"Pending",v:assignments.filter(a=>!a.done).length,c:T.warning,nav:"assignments"},{l:"Study Hrs Complete",v:Object.keys(completedStudy).filter(k=>completedStudy[k]).length*2,c:"#0ea5e9",nav:"calendar"},{l:"Milestones",v:milestones.filter(m=>!m.done).length,c:"#a78bfa",nav:"dissertation"},{l:"Done",v:assignments.filter(a=>a.done).length,c:T.success,nav:"assignments"}].map(s=>(
                   <div key={s.l} className="card stat-card" onClick={()=>setView(s.nav)} title={`Go to ${s.nav}`} style={{textAlign:"center",borderTop:`2px solid ${s.c}`}}>
                     <div style={{fontSize:26,fontWeight:700,color:s.c}}>{s.v}</div>
                     <div style={{fontSize:9,color:T.muted,marginTop:2,letterSpacing:1,textTransform:"uppercase"}}>{s.l}</div>
                   </div>
                 ))}
               </div>
+              {/* ── WELLNESS ALERT ── */}
+              {(timeData.overloaded||timeData.strained)&&(
+                <div style={{marginBottom:14,padding:"12px 16px",borderRadius:12,border:`1px solid ${timeData.overloaded?"rgba(239,68,68,.4)":"rgba(245,158,11,.4)"}`,background:timeData.overloaded?"rgba(239,68,68,.08)":"rgba(245,158,11,.06)",display:"flex",gap:12,alignItems:"flex-start"}}>
+                  <div style={{fontSize:24,flexShrink:0}}>{timeData.overloaded?"🚨":"⚠️"}</div>
+                  <div style={{flex:1}}>
+                    <div style={{fontWeight:700,fontSize:13,color:timeData.overloaded?T.danger:T.caution,marginBottom:3}}>
+                      {timeData.overloaded?"You may be overcommitted this week":"Your schedule is getting full"}
+                    </div>
+                    <div style={{fontSize:12,color:T.muted,lineHeight:1.6}}>
+                      {timeData.overloaded
+                        ?`You have ${timeData.totalWk}+ committed hours this week. Research shows performance drops significantly above 80hrs/week. Consider rescheduling or delegating something.`
+                        :`You have ${timeData.totalWk} committed hours this week. Make sure you're protecting time for sleep, meals, and recovery.`}
+                    </div>
+                    <div style={{display:"flex",gap:8,marginTop:8,flexWrap:"wrap"}}>
+                      <button className="bg2" style={{fontSize:11}} onClick={()=>sendChat("I have "+timeData.totalWk+" committed hours this week. What should I prioritize or cut back on?")}>Ask AI for Advice</button>
+                      <button className="bg2" style={{fontSize:11}} onClick={()=>setShowTimeTracker(true)}>View Time Breakdown</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── TIME TRACKER WIDGET ── */}
+              <div className="card" style={{marginBottom:14,cursor:"pointer"}} onClick={()=>setShowTimeTracker(s=>!s)}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                  <div>
+                    <div style={{fontSize:10,letterSpacing:2,color:T.accent,textTransform:"uppercase",marginBottom:2}}>Weekly Time Overview</div>
+                    <div style={{fontSize:13,fontWeight:600,color:T.text}}>{timeData.totalWk}h committed · {timeData.freeHrs}h free time remaining</div>
+                  </div>
+                  <span style={{fontSize:12,color:T.muted}}>{showTimeTracker?"▲ Hide":"▼ Details"}</span>
+                </div>
+                {/* Stacked bar chart */}
+                <div style={{display:"flex",height:14,borderRadius:7,overflow:"hidden",gap:1,marginBottom:6}}>
+                  {timeData.breakdown.map(cat=>(
+                    <div key={cat.label} title={`${cat.label}: ${cat.hrs}h`} style={{flex:cat.hrs,background:cat.color,minWidth:cat.hrs>0?2:0,transition:"flex .4s"}}/>
+                  ))}
+                </div>
+                <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                  {timeData.breakdown.map(cat=>(
+                    <span key={cat.label} style={{fontSize:10,color:T.muted,display:"flex",alignItems:"center",gap:3}}>
+                      <span style={{width:7,height:7,borderRadius:2,background:cat.color,display:"inline-block",flexShrink:0}}/>
+                      {cat.label} {cat.hrs}h
+                    </span>
+                  ))}
+                </div>
+
+                {/* Drill-down panel */}
+                {showTimeTracker&&(
+                  <div style={{marginTop:14,borderTop:`1px solid ${T.border}`,paddingTop:12}} onClick={e=>e.stopPropagation()}>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8,marginBottom:12}}>
+                      {timeData.breakdown.map(cat=>(
+                        <div key={cat.label} onClick={()=>setTrackerCategory(trackerCategory===cat.label?null:cat.label)} style={{padding:"10px 12px",borderRadius:9,border:`2px solid ${trackerCategory===cat.label?cat.color:T.border2}`,background:trackerCategory===cat.label?`rgba(${hexToRgb(cat.color)},.1)`:"transparent",cursor:"pointer",transition:"all .2s"}}>
+                          <div style={{fontSize:18,marginBottom:4}}>{cat.icon}</div>
+                          <div style={{fontSize:12,fontWeight:600,color:T.text}}>{cat.label}</div>
+                          <div style={{fontSize:11,color:cat.color,fontWeight:700}}>{cat.hrs}h / wk</div>
+                        </div>
+                      ))}
+                    </div>
+                    {trackerCategory&&(()=>{
+                      const cat=timeData.breakdown.find(c=>c.label===trackerCategory);
+                      if(!cat)return null;
+                      return(
+                        <div style={{padding:"10px 14px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`}}>
+                          <div style={{fontWeight:600,fontSize:13,marginBottom:8,color:cat.color}}>{cat.icon} {cat.label} Breakdown</div>
+                          {cat.detail.length===0
+                            ?<div style={{fontSize:12,color:T.faint}}>No details yet. Add schedule blocks to see a breakdown.</div>
+                            :cat.detail.map((d,i)=><div key={i} style={{fontSize:12,color:T.muted,padding:"3px 0",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:6}}><span style={{width:5,height:5,borderRadius:"50%",background:cat.color,flexShrink:0,display:"inline-block"}}/>  {d}</div>)
+                          }
+                        </div>
+                      );
+                    })()}
+
+                    {/* Study hours completed this session */}
+                    {timeData.studyDone>0&&(
+                      <div style={{marginTop:10,padding:"8px 12px",background:`rgba(${hexToRgb(T.success)},.08)`,borderRadius:8,border:`1px solid rgba(${hexToRgb(T.success)},.2)`,fontSize:12,color:T.success}}>
+                        ✓ You have completed <strong>{timeData.studyDone}h</strong> of studying this session.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
                 <div className="card">
                   <div style={{fontSize:10,letterSpacing:2,color:T.accent,textTransform:"uppercase",marginBottom:9}}>Upcoming Deadlines</div>
@@ -1000,7 +1201,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                     <div style={{fontSize:11,color:T.muted,marginBottom:6}}>{nextMilestone.notes}</div>
                     <div className="prog-bar"><div className="prog-fill" style={{width:`${Math.round(milestones.filter(m=>m.done).length/Math.max(milestones.length,1)*100)}%`,background:T.accent}}/></div>
                     <div style={{fontSize:11,color:T.muted,marginTop:4}}>{milestones.filter(m=>m.done).length}/{milestones.length} milestones · {daysUntil(nextMilestone.due)}d to next</div>
-                  </>):<div style={{color:T.faint,fontSize:12}}>Add milestones in the Dissertation tab.</div>}
+                  </>):<div style={{color:T.faint,fontSize:12}}>Add milestones in the {["doctoral","postdoc"].includes(profile?.degree_level)?"Dissertation":"Major Projects & Presentations"} tab.</div>}
                 </div>
                 <div className="card">
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}>
@@ -1037,6 +1238,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                 <span><span style={{display:"inline-block",width:8,height:8,borderRadius:2,background:"#0ea5e9",marginRight:4}}/>Study</span>
                 <span><span style={{display:"inline-block",width:8,height:8,borderRadius:2,background:"#a78bfa",marginRight:4}}/>Milestone</span>
                 <span><span style={{display:"inline-block",width:8,height:8,borderRadius:2,background:T.caution,marginRight:4}}/>Travel</span>
+                <span><span style={{display:"inline-block",width:8,height:8,borderRadius:2,background:"#10b981",marginRight:4}}/>Class</span>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:3}}>
                 {DAYS_SHORT.map(d=><div key={d} style={{textAlign:"center",fontSize:10,color:T.faint,letterSpacing:1,textTransform:"uppercase",padding:"2px 0"}}>{d}</div>)}
@@ -1044,7 +1246,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
               <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
                 {calDays.map((day,i)=>{
                   if(!day)return<div key={i}/>;
-                  const{asgn,study,travel,milestone,blocks}=getEventsForDay(calYear,calMonth,day);
+                  const{asgn,study,travel,milestone,blocks,classes}=getEventsForDay(calYear,calMonth,day);
                   const isToday=calYear===t.year&&calMonth===t.month&&day===t.day;
                   const isSel=selectedDay===day;
                   return(
@@ -1058,16 +1260,36 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                 })}
               </div>
               {selectedDay&&(()=>{
-                const{asgn,study,travel,milestone,blocks}=getEventsForDay(calYear,calMonth,selectedDay);
+                const{asgn,study,travel,milestone,blocks,classes}=getEventsForDay(calYear,calMonth,selectedDay);
                 return(
                   <div className="card fi" style={{marginTop:10}}>
                     <div style={{fontWeight:700,marginBottom:7}}>{MONTHS[calMonth]} {selectedDay}, {calYear}</div>
                     {travel&&<div style={{marginBottom:6,fontSize:12,color:T.caution}}>✈ {travel.label} — traveling</div>}
                     {milestone&&<div style={{padding:"6px 9px",background:"rgba(167,139,250,.08)",borderRadius:7,marginBottom:6,border:"1px solid rgba(167,139,250,.2)"}}><div style={{fontWeight:600,color:"#a78bfa",fontSize:12}}>⬟ {milestone.title}</div><div style={{fontSize:10,color:T.muted}}>{milestone.notes}</div></div>}
+                    {/* Class sessions for the day */}
+                    {getEventsForDay(calYear,calMonth,selectedDay).classes?.map(c=>(
+                      <div key={c.id} style={{display:"flex",gap:8,padding:"6px 0",borderBottom:`1px solid ${T.border}`,alignItems:"center"}}>
+                        <span style={{fontSize:12}}>🎓</span>
+                        <div style={{flex:1}}>
+                          <div style={{fontWeight:600,fontSize:12,color:c.color}}>{c.name}</div>
+                          <div style={{fontSize:10,color:T.muted}}>{c.class_time}{c.class_end_time?" – "+c.class_end_time:""}</div>
+                        </div>
+                      </div>
+                    ))}
                     {blocks.map(b=><div key={b.id} style={{fontSize:11,color:T.muted,marginBottom:3}}>⊞ {b.label} ({b.start_time}–{b.end_time})</div>)}
                     {asgn.length===0&&study.length===0&&!travel&&!milestone&&blocks.length===0&&<div style={{color:T.faint}}>Nothing scheduled.</div>}
                     {asgn.map(a=>{const c=courses.find(x=>x.id===a.courseId);return(<div key={a.id} style={{display:"flex",gap:8,padding:"5px 0",borderBottom:`1px solid ${T.border}`,alignItems:"center"}}><span style={{color:c?.color,fontSize:12}}>📌</span><div style={{flex:1}}><div style={{fontWeight:600,fontSize:12}}>{a.title}</div><div style={{fontSize:10,color:T.muted}}>{c?.name}</div></div></div>);})}
-                    {study.map(b=>(<div key={b.id} style={{display:"flex",gap:8,padding:"5px 0",borderBottom:`1px solid ${T.border}`}}><span style={{fontSize:12}}>📚</span><div><div style={{fontWeight:600,fontSize:12}}>{b.title}</div><div style={{fontSize:10,color:T.muted}}>{b.slot}</div></div></div>))}
+                    {study.map(b=>{const done=completedStudy[b.id];const course=courses.find(c=>c.id===b.courseId);return(
+                      <div key={b.id} style={{display:"flex",gap:8,padding:"7px 0",borderBottom:`1px solid ${T.border}`,alignItems:"center",opacity:done?.6:1}}>
+                        <span style={{fontSize:12}}>📚</span>
+                        <div style={{flex:1}}>
+                          <div style={{fontWeight:600,fontSize:12,textDecoration:done?"line-through":"none"}}>{b.title}</div>
+                          <div style={{fontSize:10,color:T.muted}}>{b.startTime} – {b.endTime} · {b.hours}h · {b.slot}</div>
+                          {course&&<div style={{fontSize:10,color:course.color,marginTop:1}}>● {course.name}</div>}
+                        </div>
+                        <button onClick={()=>toggleStudyComplete(b.id)} style={{fontSize:10,padding:"3px 8px",borderRadius:6,border:`1px solid ${done?T.success:T.border2}`,background:done?`rgba(${hexToRgb(T.success)},.1)`:"transparent",color:done?T.success:T.muted,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{done?"✓ Done":"Mark Done"}</button>
+                      </div>
+                    );})}
                   </div>
                 );
               })()}
@@ -1133,6 +1355,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:5}}>
                         <button onClick={()=>{setShowFlashModal(a.id);setView("flashcards");}} style={{background:"transparent",border:`1px solid ${hasCards?"#a78bfa":T.border2}`,borderRadius:6,padding:"3px 7px",fontSize:11,color:hasCards?"#a78bfa":T.muted}}>{hasCards?"⬡ Cards":"⬡ Gen"}</button>
+                        <button onClick={()=>setEditAssign({...a})} style={{background:"transparent",border:`1px solid ${T.border2}`,borderRadius:6,padding:"3px 7px",fontSize:11,color:T.muted}}>✏️</button>
                         <button className="del-btn" onClick={()=>deleteAssignment(a.id)}>🗑</button>
                         <div style={{textAlign:"right"}}>
                           <div style={{fontSize:11,fontWeight:700,color:a.done?T.faint:urgencyColor(days,T)}}>{a.done?"Done":days<0?"Overdue":days===0?"Today!":`${days}d`}</div>
@@ -1166,7 +1389,8 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                       <div style={{fontWeight:700,fontSize:14,flex:1,paddingRight:8}}>{c.name}</div>
                       <button className="del-btn" onClick={()=>deleteCourse(c.id)}>Drop 🗑</button>
                     </div>
-                    {c.professor&&<div style={{fontSize:11,color:T.muted,marginBottom:8}}>👤 {c.professor}</div>}
+                    {c.professor&&<div style={{fontSize:11,color:T.muted,marginBottom:4}}>👤 {c.professor}</div>}
+                    {c.class_days?.length>0&&<div style={{fontSize:11,color:T.muted,marginBottom:8}}>🗓 {c.class_days.join(", ")} {c.class_time&&`· ${c.class_time}`}{c.class_end_time&&` – ${c.class_end_time}`}</div>}
                     {rmp?(
                       <div style={{background:T.subcard,borderRadius:8,padding:"8px 10px",marginBottom:8,border:`1px solid ${T.border2}`}}>
                         <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
@@ -1316,7 +1540,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                 </div>
               </div>
               <div className="card">
-                {milestones.length===0&&<div style={{color:T.faint,fontSize:13,textAlign:"center",padding:20}}>No milestones yet. Click + Milestone to build your doctoral timeline.</div>}
+                {milestones.length===0&&<div style={{color:T.faint,fontSize:13,textAlign:"center",padding:20}}>No milestones yet. Click + Milestone to track your {["doctoral","postdoc"].includes(profile?.degree_level)?"doctoral":"project"} timeline.</div>}
                 {milestones.sort((a,b)=>new Date(a.due)-new Date(b.due)).map((m,idx)=>{
                   const days=daysUntil(m.due);const isNext=!m.done&&milestones.filter(x=>!x.done)[0]?.id===m.id;
                   return(<div key={m.id} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"9px 0",borderBottom:`1px solid ${T.border}`,opacity:m.done?0.6:1}}>
@@ -1572,6 +1796,18 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
           <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Professor (for RMP lookup)</div><input className="ifield" placeholder="Professor name" value={newCourse.professor} onChange={e=>setNewCourse(c=>({...c,professor:e.target.value}))}/></div>
           <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Difficulty: {newCourse.difficulty}/5</div><input type="range" min={1} max={5} value={newCourse.difficulty} onChange={e=>setNewCourse(c=>({...c,difficulty:+e.target.value}))} style={{width:"100%",accentColor:T.accent}}/></div>
           <div><div style={{fontSize:11,color:T.muted,marginBottom:6}}>Color</div><div style={{display:"flex",gap:7}}>{["#6366f1","#0ea5e9","#ec4899","#10b981","#f59e0b","#8b5cf6","#ef4444","#14b8a6","#f97316","#06b6d4","#84cc16","#a855f7"].map(col=><div key={col} onClick={()=>setNewCourse(c=>({...c,color:col}))} title={courses.some(x=>x.color===col)?"Already used by another course":col} style={{width:24,height:24,borderRadius:6,background:col,cursor:"pointer",border:newCourse.color===col?"3px solid #fff":"3px solid transparent",opacity:courses.some(x=>x.color===col)?.6:1}}/>)}</div></div>
+          <div>
+            <div style={{fontSize:11,color:T.muted,marginBottom:6}}>Class Days <span style={{color:T.faint}}>(which days does this class meet?)</span></div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {DAYS_SHORT.map(d=>{const sel=(newCourse.class_days||[]).includes(d);return(
+                <button key={d} type="button" onClick={()=>{const cur=newCourse.class_days||[];setNewCourse(c=>({...c,class_days:sel?cur.filter(x=>x!==d):[...cur,d]}));}} style={{padding:"5px 10px",borderRadius:7,border:`2px solid ${sel?T.accent:T.border2}`,background:sel?`rgba(${hexToRgb(T.accent)},.12)`:"transparent",color:sel?T.accent:T.muted,fontSize:12,fontWeight:sel?700:400,cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}}>{d}</button>
+              );})}
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
+            <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Class Start Time</div><input type="time" className="ifield" value={newCourse.class_time||""} onChange={e=>setNewCourse(c=>({...c,class_time:e.target.value}))}/></div>
+            <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Class End Time</div><input type="time" className="ifield" value={newCourse.class_end_time||""} onChange={e=>setNewCourse(c=>({...c,class_end_time:e.target.value}))}/></div>
+          </div>
           <div style={{display:"flex",gap:8,marginTop:4}}><button className="bg2" style={{flex:1}} onClick={()=>setShowAddCourse(false)}>Cancel</button><button className="bp" style={{flex:1}} onClick={addCourse}>Add Course</button></div>
         </div>
       </div></div>)}
@@ -1640,6 +1876,31 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
         </div>
       </div></div>)}
 
+
+      {/* ═══ EDIT ASSIGNMENT MODAL ═══ */}
+      {editAssign&&(<div className="mo" onClick={()=>setEditAssign(null)}><div className="md fi" onClick={e=>e.stopPropagation()}>
+        <div style={{fontWeight:700,fontSize:16,marginBottom:13}}>✏️ Edit Assignment</div>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Course</div>
+            <select className="ifield" value={editAssign.courseId} onChange={e=>setEditAssign(a=>({...a,courseId:e.target.value}))}>
+              {courses.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Title</div><input className="ifield" value={editAssign.title} onChange={e=>setEditAssign(a=>({...a,title:e.target.value}))}/></div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
+            <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Due Date</div><input type="date" className="ifield" value={editAssign.due} onChange={e=>setEditAssign(a=>({...a,due:e.target.value}))}/></div>
+            <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Type</div>
+              <select className="ifield" value={editAssign.type} onChange={e=>setEditAssign(a=>({...a,type:e.target.value}))}>
+                <option value="" disabled hidden>Select type...</option>
+                {["Paper","Exam","Case Study","Homework","Project","Discussion","Presentation","Lab","Quiz"].map(tp=><option key={tp} value={tp.toLowerCase().replace(" ","")}>{tp}</option>)}
+              </select>
+            </div>
+          </div>
+          <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Estimated Hours: {editAssign.estHours}</div><input type="range" min={1} max={30} value={editAssign.estHours} onChange={e=>setEditAssign(a=>({...a,estHours:+e.target.value}))} style={{width:"100%",accentColor:T.accent}}/></div>
+          <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Notes / Topics</div><textarea className="ifield" rows={2} value={editAssign.topics||""} onChange={e=>setEditAssign(a=>({...a,topics:e.target.value}))} style={{resize:"vertical",fontSize:12}} placeholder="Key topics, notes for flashcards..."/></div>
+          <div style={{display:"flex",gap:8,marginTop:4}}><button className="bg2" style={{flex:1}} onClick={()=>setEditAssign(null)}>Cancel</button><button className="bp" style={{flex:1}} onClick={saveEditAssignment}>Save Changes</button></div>
+        </div>
+      </div></div>)}
 
       {/* ═══ CONFIRM MODAL ═══ */}
       {confirmModal&&(
