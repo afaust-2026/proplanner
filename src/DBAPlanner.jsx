@@ -483,13 +483,19 @@ export default function ProPlanner(){
     setShowAddCourse(false);setNewCourse({name:"",difficulty:3,color:"#6366f1",professor:""});notify("Course added!");
   }
 
-  async function deleteCourse(id){
-    showConfirm("Drop this course?",()=>doDeleteCourse(id),`This will also permanently remove all assignments for this course.`);return;
-    await supabase.from("courses").delete().eq("id",id);
-    await supabase.from("assignments").delete().eq("course_id",id);
-    setCourses(p=>p.filter(c=>c.id!==id));
-    setAssignments(p=>p.filter(a=>a.courseId!==id));
-    notify("Course dropped.");
+  function deleteCourse(id){
+    const count=assignments.filter(a=>a.courseId===id).length;
+    showConfirm(
+      "Drop this course?",
+      async()=>{
+        await supabase.from("assignments").delete().eq("course_id",id);
+        await supabase.from("courses").delete().eq("id",id);
+        setCourses(p=>p.filter(c=>c.id!==id));
+        setAssignments(p=>p.filter(a=>a.courseId!==id));
+        notify("Course dropped.");
+      },
+      count>0?`This will also permanently remove ${count} assignment${count>1?"s":""} for this course.`:"This action cannot be undone."
+    );
   }
 
   async function addAssignment(){
@@ -502,10 +508,17 @@ export default function ProPlanner(){
     setShowAddAssign(false);setNewAssign({courseId:courses[0]?.id||"",title:"",due:"",type:"",estHours:4});notify("Assignment added!");
   }
 
-  async function deleteAssignment(id){
-    showConfirm("Delete this assignment?",()=>doDeleteAssignment(id));return;
-    await supabase.from("assignments").delete().eq("id",id);
-    setAssignments(p=>p.filter(a=>a.id!==id));notify("Deleted.");
+  function deleteAssignment(id){
+    const a=assignments.find(x=>x.id===id);
+    showConfirm(
+      "Delete this assignment?",
+      async()=>{
+        await supabase.from("assignments").delete().eq("id",id);
+        setAssignments(p=>p.filter(x=>x.id!==id));
+        notify("Assignment deleted.");
+      },
+      a?`"${a.title}" will be permanently removed.`:""
+    );
   }
 
   async function toggleDone(id){
@@ -909,12 +922,15 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
 
         {/* ═══ MAIN CONTENT ═══ */}
         <main className="main-content" style={{flex:1,overflowY:"auto",padding:"22px 26px",minWidth:0,position:"relative"}}>
-          {/* Hamburger button — only visible on mobile when sidebar is closed */}
+          {/* Hamburger — subtle, top of page, mobile only */}
           {isMobile&&!sidebarOpen&&(
-            <button onClick={()=>setSidebar(true)} style={{position:"fixed",top:12,left:12,zIndex:98,background:T.accent,color:"#fff",border:"none",borderRadius:9,width:40,height:40,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,cursor:"pointer",boxShadow:"0 2px 12px rgba(0,0,0,.3)"}}>
-              <div style={{width:16,height:2,background:"#fff",borderRadius:2}}/>
-              <div style={{width:16,height:2,background:"#fff",borderRadius:2}}/>
-              <div style={{width:16,height:2,background:"#fff",borderRadius:2}}/>
+            <button onClick={()=>setSidebar(true)} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",marginBottom:14,background:T.card,border:`1px solid ${T.border2}`,borderRadius:9,cursor:"pointer",color:T.muted,fontSize:12,width:"100%",maxWidth:200}}>
+              <div style={{display:"flex",flexDirection:"column",gap:3,flexShrink:0}}>
+                <div style={{width:14,height:2,background:T.muted,borderRadius:2}}/>
+                <div style={{width:14,height:2,background:T.muted,borderRadius:2}}/>
+                <div style={{width:14,height:2,background:T.muted,borderRadius:2}}/>
+              </div>
+              <span style={{fontSize:12,color:T.muted}}>{uni.logo} Menu</span>
             </button>
           )}
 
