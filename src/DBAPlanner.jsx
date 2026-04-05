@@ -322,9 +322,13 @@ export default function ProPlanner(){
   const[cardFlipped,setCardFlipped]=useState(false);
   const[studyMode,setStudyMode]=useState(false);
 
-  // RMP state
-  const[rmpSearching,setRmpSearching]=useState({});
+  // RMP + ProPlanner professor ratings state
   const[rmpResults,setRmpResults]=useState({});
+  const[profRatings,setProfRatings]=useState([]); // community ratings from all users
+  const[showRateModal,setShowRateModal]=useState(null); // {courseId, profName}
+  const[showSearchProf,setShowSearchProf]=useState(null); // courseId searching community ratings
+  const[newRating,setNewRating]=useState({quality:0,difficulty:0,workload:0,wouldTakeAgain:null,comment:""});
+  const[profSearch,setProfSearch]=useState("");
 
   // Chat state
   const[chatMessages,setChatMessages]=useState([{role:"assistant",content:"Hi! I am your ProPlanner AI assistant. I know your schedule, courses, and commitments. Ask me anything!"}]);
@@ -374,13 +378,14 @@ export default function ProPlanner(){
 
   async function loadAllData(){
     const uid=authUser.id;
-    const[c,a,m,sb,td,el]=await Promise.all([
+    const[c,a,m,sb,td,el,pr]=await Promise.all([
       supabase.from("courses").select("*").eq("user_id",uid).order("created_at"),
       supabase.from("assignments").select("*").eq("user_id",uid).order("created_at"),
       supabase.from("milestones").select("*").eq("user_id",uid).order("due_date"),
       supabase.from("schedule_blocks").select("*").eq("user_id",uid),
       supabase.from("travel_dates").select("*").eq("user_id",uid),
       supabase.from("energy_log").select("*").eq("user_id",uid),
+      supabase.from("professor_ratings").select("*").order("created_at",{ascending:false}),
     ]);
     if(c.data)setCourses(c.data.map(x=>({...x,rmpData:x.rmp_data})));
     if(a.data)setAssignments(a.data.map(x=>({...x,courseId:x.course_id,due:x.due_date,estHours:x.est_hours,flashcards:x.flashcards||[]})));
@@ -388,6 +393,7 @@ export default function ProPlanner(){
     if(sb.data)setScheduleBlocks(sb.data);
     if(td.data)setTravelDates(td.data.map(x=>({...x,start:x.start_date,end:x.end_date})));
     if(el.data)setEnergyLog(el.data.map(x=>({date:x.log_date,level:x.level})));
+    if(pr.data)setProfRatings(pr.data);
   }
 
   function notify(msg){setNotification(msg);setTimeout(()=>setNotification(""),3500);}
@@ -444,7 +450,8 @@ export default function ProPlanner(){
     const pendingAssignments=assignments.filter(a=>!a.done&&daysUntil(a.due)>=0).sort((a,b)=>new Date(a.due)-new Date(b.due));
     pendingAssignments.forEach(assign=>{
       const course=courses.find(c=>c.id===assign.courseId);
-      const diff=course?.rmpData?Math.round((course.difficulty+rmpToInternal(course.rmpData.avgDifficulty))/2):course?.difficulty||3;
+      const profStats=course?.professor?getProfStats(course.professor,uni.name):null;
+      const diff=profStats?Math.round((course.difficulty+profStats.difficulty)/2):course?.rmpData?Math.round((course.difficulty+rmpToInternal(course.rmpData.avgDifficulty))/2):course?.difficulty||3;
       // Calculate sessions needed: estHours adjusted by difficulty, in 2-hr sessions
       const adjustedHours=assign.estHours*(diff/3);
       const sessions=Math.ceil(adjustedHours/2);
@@ -782,6 +789,67 @@ Return ONLY the JSON object, nothing else.`}
     await supabase.from("courses").update({rmp_data:rmp,difficulty:blended}).eq("id",cid);
     setCourses(p=>p.map(c=>c.id!==cid?c:{...c,rmpData:rmp,difficulty:blended}));
     setRmpResults(r=>({...r,[cid]:[]}));notify("RMP data applied — difficulty recalibrated!");
+  }
+
+  // ── Professor Ratings (community) ────────────────────────────────────────────
+  function getProfStats(profName,school){
+    // Get all ratings for this professor at this school
+    const key=profName?.toLowerCase().trim();
+    const schoolKey=school?.toLowerCase().trim();
+    const ratings=profRatings.filter(r=>
+      r.prof_name?.toLowerCase().trim()===key&&
+      (!schoolKey||r.school?.toLowerCase().trim()===schoolKey)
+    );
+    if(!ratings.length)return null;
+    const avg=(arr)=>arr.reduce((s,x)=>s+x,0)/arr.length;
+    return{
+      count:ratings.length,
+      quality:+avg(ratings.map(r=>r.quality)).toFixed(1),
+      difficulty:+avg(ratings.map(r=>r.difficulty)).toFixed(1),
+      workload:+avg(ratings.map(r=>r.workload)).toFixed(1),
+      wouldTakeAgain:Math.round(ratings.filter(r=>r.would_take_again).length/ratings.length*100),
+      comments:ratings.filter(r=>r.comment).map(r=>({text:r.comment,date:r.created_at?.slice(0,10)})).slice(0,5),
+      ratings,
+    };
+  }
+
+  async function submitProfRating(){
+    if(!showRateModal)return;
+    if(!newRating.quality||!newRating.difficulty||!newRating.workload)return notify("Please rate all three categories.");
+    if(newRating.wouldTakeAgain===null)return notify("Please answer 'Would you take this professor again?'");
+    const{error}=await supabase.from("professor_ratings").insert({
+      user_id:authUser.id,
+      prof_name:showRateModal.profName,
+      school:uni.name,
+      quality:newRating.quality,
+      difficulty:newRating.difficulty,
+      workload:newRating.workload,
+      would_take_again:newRating.wouldTakeAgain,
+      comment:newRating.comment||null,
+      course_name:showRateModal.courseName||null,
+    });
+    if(error)return notify("Error saving rating.");
+    // Reload ratings
+    const{data}=await supabase.from("professor_ratings").select("*").order("created_at",{ascending:false});
+    if(data)setProfRatings(data);
+    // Update course difficulty with blended score
+    const stats=getProfStats(showRateModal.profName,uni.name);
+    if(stats&&showRateModal.courseId){
+      const newDiff=Math.round((newRating.difficulty+(courses.find(c=>c.id===showRateModal.courseId)?.difficulty||3))/2);
+      await supabase.from("courses").update({difficulty:newDiff}).eq("id",showRateModal.courseId);
+      setCourses(p=>p.map(c=>c.id===showRateModal.courseId?{...c,difficulty:newDiff}:c));
+    }
+    setShowRateModal(null);
+    setNewRating({quality:0,difficulty:0,workload:0,wouldTakeAgain:null,comment:""});
+    notify("Rating submitted! Thank you for helping your peers. 🎓");
+  }
+
+  async function applyProfStats(courseId,stats,profName){
+    // Apply community rating to course difficulty
+    const blended=Math.round(((courses.find(c=>c.id===courseId)?.difficulty||3)+stats.difficulty)/2);
+    await supabase.from("courses").update({difficulty:blended}).eq("id",courseId);
+    setCourses(p=>p.map(c=>c.id!==courseId?c:{...c,difficulty:blended}));
+    notify(`✓ Community ratings applied! Difficulty updated to ${blended}/5.`);
   }
 
   // ── Flashcards ─────────────────────────────────────────────────────────────
@@ -1345,6 +1413,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                     <div style={{fontWeight:700,fontSize:13}}>{course.name}</div>
                     {course.rmpData&&<span style={{fontSize:10,color:T.caution}}>⭐{course.rmpData.avgRating?.toFixed(1)} 🔥{course.rmpData.avgDifficulty?.toFixed(1)}</span>}
                   </div>
+                  {(()=>{const ps=course.professor?getProfStats(course.professor,uni.name):null;return ps&&<div style={{display:"flex",gap:8,marginBottom:5,fontSize:11,color:T.muted}}>⭐{ps.quality} Quality · 🔥{ps.difficulty} Difficulty · {ps.count} peer rating{ps.count>1?"s":""} <button onClick={()=>{setShowRateModal({courseId:course.id,profName:course.professor,courseName:course.name});setNewRating({quality:0,difficulty:0,workload:0,wouldTakeAgain:null,comment:""}); }} style={{background:"transparent",border:"none",color:T.accent,fontSize:11,cursor:"pointer",padding:0,fontFamily:"inherit"}}>+ Rate</button></div>})()}
                   {ca.sort((a,b)=>new Date(a.due)-new Date(b.due)).map(a=>{
                     const days=daysUntil(a.due);const sh=studyBlocks.filter(b=>b.assignId===a.id).length*2;const hasCards=a.flashcards?.length>0;
                     return(<div key={a.id} style={{display:"flex",alignItems:"center",gap:9,padding:"9px 11px",background:dark?"#12121a":T.card,border:`1px solid ${T.border}`,borderRadius:8,marginBottom:4,opacity:a.done?0.5:1,transition:"opacity .2s"}}>
@@ -1424,38 +1493,101 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                         </div>
                       )}
                     </div>
-                    {rmp?(
-                      <div style={{background:T.subcard,borderRadius:8,padding:"8px 10px",marginBottom:8,border:`1px solid ${T.border2}`}}>
-                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-                          <div style={{fontSize:12,fontWeight:600}}>{rmp.firstName} {rmp.lastName}</div>
-                          <a href={`https://www.ratemyprofessors.com/professor/${rmp.id}`} target="_blank" rel="noreferrer" style={{fontSize:10,color:T.accent,textDecoration:"none"}}>RMP →</a>
-                        </div>
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,textAlign:"center"}}>
-                          {[{label:"Rating",val:rmp.avgRating?.toFixed(1),color:rmp.avgRating>=4?T.success:rmp.avgRating>=3?T.caution:T.danger},{label:"Difficulty",val:rmp.avgDifficulty?.toFixed(1),color:rmp.avgDifficulty>=4?T.danger:rmp.avgDifficulty>=3?T.caution:T.success},{label:"Again%",val:Math.round(rmp.wouldTakeAgainPercent||0)+"%",color:T.success}].map(x=>(
-                            <div key={x.label} style={{background:T.card,borderRadius:6,padding:"4px"}}><div style={{fontSize:13,fontWeight:700,color:x.color}}>{x.val}</div><div style={{fontSize:9,color:T.muted}}>{x.label}</div></div>
-                          ))}
-                        </div>
-                        <div style={{fontSize:10,color:"#a78bfa",marginTop:5,textAlign:"center"}}>📊 Blended into study schedule</div>
-                      </div>
-                    ):(
-                      <div style={{marginBottom:8}}>
-                        <div style={{marginBottom:5}}>
-                          <input className="ifield" placeholder="Professor name..." value={c.professor||""} onChange={e=>setCourses(p=>p.map(x=>x.id===c.id?{...x,professor:e.target.value}:x))} style={{fontSize:11,padding:"5px 8px"}}/>
-                        </div>
-                        <button className="bg2" style={{width:"100%",fontSize:11}} onClick={()=>window.open(`https://www.ratemyprofessors.com/search/professors?q=${encodeURIComponent((c.professor||c.name)+" "+uni.abbr)}`,"_blank")}>🔗 Open RateMyProfessors.com</button>
-                        {rmpResults[c.id]&&rmpResults[c.id]!=="notfound"&&rmpResults[c.id].length>0&&(
-                          <div style={{marginTop:5,display:"flex",flexDirection:"column",gap:4}}>
-                            {rmpResults[c.id].map(prof=>(
-                              <div key={prof.id} onClick={()=>applyRmp(c.id,prof)} style={{padding:"6px 9px",background:T.card,border:`1px solid ${T.border2}`,borderRadius:7,cursor:"pointer",transition:"border-color .2s"}} onMouseEnter={e=>e.currentTarget.style.borderColor=T.accent} onMouseLeave={e=>e.currentTarget.style.borderColor=T.border2}>
-                                <div style={{fontSize:12,fontWeight:600}}>{prof.firstName} {prof.lastName}</div>
-                                <div style={{fontSize:10,color:T.muted}}>⭐{prof.avgRating?.toFixed(1)} 🔥{prof.avgDifficulty?.toFixed(1)} · {prof.numRatings} ratings</div>
+                    {(()=>{
+                      const stats=c.professor?getProfStats(c.professor,uni.name):null;
+                      const rmp=c.rmpData;
+                      const myRating=profRatings.find(r=>r.user_id===authUser?.id&&r.prof_name?.toLowerCase()===c.professor?.toLowerCase());
+                      return(<div style={{marginBottom:8}}>
+                        {/* Professor name field if not set */}
+                        {!c.professor&&<div style={{marginBottom:6}}>
+                          <input className="ifield" placeholder="Enter professor name..." value={c.professor||""} onChange={e=>setCourses(p=>p.map(x=>x.id===c.id?{...x,professor:e.target.value}:x))} style={{fontSize:11,padding:"5px 8px"}}/>
+                          <div style={{fontSize:10,color:T.faint,marginTop:3}}>Add professor name to search peer ratings</div>
+                        </div>}
+
+                        {/* Community ratings from ProPlanner peers */}
+                        {stats?(
+                          <div style={{background:`rgba(${hexToRgb(T.success)},.06)`,borderRadius:9,padding:"10px 12px",marginBottom:7,border:`1px solid rgba(${hexToRgb(T.success)},.2)`}}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}>
+                              <div style={{fontSize:11,fontWeight:700,color:T.success}}>🎓 ProPlanner Peer Ratings</div>
+                              <span style={{fontSize:10,color:T.muted}}>{stats.count} rating{stats.count>1?"s":""}</span>
+                            </div>
+                            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:5,marginBottom:7}}>
+                              {[
+                                {label:"Quality",val:stats.quality,color:stats.quality>=4?T.success:stats.quality>=3?T.caution:T.danger},
+                                {label:"Difficulty",val:stats.difficulty,color:stats.difficulty>=4?T.danger:stats.difficulty>=3?T.caution:T.success},
+                                {label:"Workload",val:stats.workload,color:stats.workload>=4?T.danger:stats.workload>=3?T.caution:T.success},
+                                {label:"Again%",val:stats.wouldTakeAgain+"%",color:stats.wouldTakeAgain>=70?T.success:T.caution},
+                              ].map(x=>(
+                                <div key={x.label} style={{background:T.card,borderRadius:7,padding:"5px 3px",textAlign:"center"}}>
+                                  <div style={{fontSize:14,fontWeight:700,color:x.color}}>{x.val}</div>
+                                  <div style={{fontSize:9,color:T.muted,marginTop:1}}>{x.label}</div>
+                                </div>
+                              ))}
+                            </div>
+                            {stats.comments.length>0&&(
+                              <div style={{borderTop:`1px solid ${T.border}`,paddingTop:6,marginBottom:6}}>
+                                {stats.comments.slice(0,2).map((cm,i)=>(
+                                  <div key={i} style={{fontSize:11,color:T.muted,padding:"3px 0",borderBottom:i<stats.comments.length-1?`1px solid ${T.border}`:"none",fontStyle:"italic",lineHeight:1.4}}>
+                                    "{cm.text}" <span style={{fontSize:9,color:T.faint,fontStyle:"normal"}}>— {cm.date}</span>
+                                  </div>
+                                ))}
                               </div>
-                            ))}
+                            )}
+                            <div style={{display:"flex",gap:5}}>
+                              <button className="bp" style={{flex:1,fontSize:10,padding:"4px 7px"}} onClick={()=>{setShowRateModal({courseId:c.id,profName:c.professor,courseName:c.name});setNewRating({quality:myRating?.quality||0,difficulty:myRating?.difficulty||0,workload:myRating?.workload||0,wouldTakeAgain:myRating?.would_take_again??null,comment:myRating?.comment||""});}}>{myRating?"Update My Rating":"Rate This Professor"}</button>
+                              <button className="bg2" style={{fontSize:10,padding:"4px 7px"}} onClick={()=>applyProfStats(c.id,stats,c.professor)}>Apply to Schedule</button>
+                            </div>
+                          </div>
+                        ):(
+                          c.professor&&<div style={{marginBottom:7}}>
+                            <button className="bp" style={{width:"100%",fontSize:11,padding:"7px",marginBottom:5}} onClick={()=>{setShowRateModal({courseId:c.id,profName:c.professor,courseName:c.name});setNewRating({quality:0,difficulty:0,workload:0,wouldTakeAgain:null,comment:""});}}>
+                              ⭐ Be the first to rate {c.professor}
+                            </button>
+                            <div style={{fontSize:10,color:T.faint,textAlign:"center",marginBottom:5}}>No peer ratings yet for this professor</div>
                           </div>
                         )}
-                        {rmpResults[c.id]==="notfound"&&<div style={{marginTop:4,fontSize:11,color:T.muted,padding:"8px 10px",background:T.subcard,borderRadius:7,border:`1px solid ${T.border2}`,lineHeight:1.5}}>ℹ️ Automatic search is not available in browsers. Use the <strong>Open RateMyProfessors.com</strong> button above to find your professor, then come back and enter their name here.</div>}
-                      </div>
-                    )}
+
+                        {/* Search other professors rated by peers */}
+                        {c.professor&&<div style={{marginBottom:5}}>
+                          <button className="bg2" style={{width:"100%",fontSize:10,padding:"4px"}} onClick={()=>setShowSearchProf(showSearchProf===c.id?null:c.id)}>
+                            🔍 Search all peer-rated professors
+                          </button>
+                          {showSearchProf===c.id&&(()=>{
+                            const allProfs=[...new Set(profRatings.filter(r=>r.school===uni.name).map(r=>r.prof_name))].filter(Boolean);
+                            const filtered=profSearch?allProfs.filter(p=>p.toLowerCase().includes(profSearch.toLowerCase())):allProfs;
+                            return(
+                              <div style={{marginTop:6,background:T.subcard,borderRadius:9,padding:"10px 11px",border:`1px solid ${T.border2}`}}>
+                                <input className="ifield" placeholder="Search professor name..." value={profSearch} onChange={e=>setProfSearch(e.target.value)} style={{fontSize:11,padding:"5px 8px",marginBottom:8}}/>
+                                {filtered.length===0&&<div style={{fontSize:11,color:T.faint}}>No professors rated yet at {uni.name}.</div>}
+                                <div style={{maxHeight:180,overflowY:"auto",display:"flex",flexDirection:"column",gap:4}}>
+                                  {filtered.map(pName=>{
+                                    const ps=getProfStats(pName,uni.name);if(!ps)return null;
+                                    return(
+                                      <div key={pName} style={{padding:"7px 9px",background:T.card,border:`1px solid ${T.border2}`,borderRadius:7,cursor:"pointer"}}
+                                        onClick={async()=>{
+                                          await supabase.from("courses").update({professor:pName}).eq("id",c.id);
+                                          setCourses(p=>p.map(x=>x.id===c.id?{...x,professor:pName}:x));
+                                          setShowSearchProf(null);setProfSearch("");notify(`Professor set to ${pName}`);
+                                        }}>
+                                        <div style={{fontWeight:600,fontSize:12}}>{pName}</div>
+                                        <div style={{fontSize:10,color:T.muted,marginTop:2}}>
+                                          ⭐{ps.quality} Quality · 🔥{ps.difficulty} Difficulty · {ps.count} rating{ps.count>1?"s":""}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>}
+
+                        {/* RMP direct link — always visible as fallback */}
+                        <a href={`https://www.ratemyprofessors.com/search/professors?q=${encodeURIComponent((c.professor||c.name)+" "+uni.abbr)}`} target="_blank" rel="noreferrer" style={{display:"block",textAlign:"center",fontSize:10,color:T.faint,textDecoration:"none",padding:"3px 0"}}>
+                          Also check RateMyProfessors.com →
+                        </a>
+                      </div>);
+                    })()}
                     <div className="prog-bar" style={{marginBottom:5}}><div className="prog-fill" style={{width:`${pct}%`,background:c.color}}/></div>
                     <div style={{fontSize:10,color:T.muted,marginBottom:next?7:0}}>{done}/{total} complete · {"★".repeat(c.difficulty)}{"☆".repeat(5-c.difficulty)}</div>
                     {next&&<div style={{fontSize:11,padding:"5px 8px",background:T.subcard,borderRadius:6}}>Next: <span style={{color:c.color,fontWeight:600}}>{next.title}</span> · {daysUntil(next.due)}d</div>}
@@ -1934,6 +2066,57 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
           <div style={{display:"flex",gap:8,marginTop:4}}><button className="bg2" style={{flex:1}} onClick={()=>setEditAssign(null)}>Cancel</button><button className="bp" style={{flex:1}} onClick={saveEditAssignment}>Save Changes</button></div>
         </div>
       </div></div>)}
+
+      {/* ═══ RATE PROFESSOR MODAL ═══ */}
+      {showRateModal&&(
+        <div className="mo" onClick={()=>setShowRateModal(null)}>
+          <div className="md fi" onClick={e=>e.stopPropagation()} style={{maxWidth:440}}>
+            <div style={{marginBottom:16}}>
+              <div style={{fontSize:10,letterSpacing:2,color:T.accent,textTransform:"uppercase",marginBottom:4}}>ProPlanner Peer Ratings</div>
+              <div style={{fontWeight:700,fontSize:18,marginBottom:2}}>Rate {showRateModal.profName}</div>
+              <div style={{fontSize:12,color:T.muted}}>{showRateModal.courseName} · {uni.name}</div>
+            </div>
+            {[
+              {key:"quality",label:"Overall Quality",desc:"How good was this professor overall?",lowLabel:"Poor",highLabel:"Excellent",color:T.success},
+              {key:"difficulty",label:"Difficulty",desc:"How difficult were exams and assignments?",lowLabel:"Easy",highLabel:"Very Hard",color:T.danger},
+              {key:"workload",label:"Workload",desc:"How much time did this course demand weekly?",lowLabel:"Light",highLabel:"Very Heavy",color:T.warning},
+            ].map(cat=>(
+              <div key={cat.key} style={{marginBottom:16,padding:"12px 14px",background:T.subcard,borderRadius:10,border:`1px solid ${T.border2}`}}>
+                <div style={{fontWeight:600,fontSize:13,marginBottom:2}}>{cat.label}</div>
+                <div style={{fontSize:11,color:T.muted,marginBottom:8}}>{cat.desc}</div>
+                <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                  <span style={{fontSize:10,color:T.faint,minWidth:28}}>{cat.lowLabel}</span>
+                  {[1,2,3,4,5].map(n=>(
+                    <button key={n} onClick={()=>setNewRating(r=>({...r,[cat.key]:n}))} style={{width:36,height:36,borderRadius:8,border:`2px solid ${newRating[cat.key]>=n?cat.color:T.border2}`,background:newRating[cat.key]>=n?`rgba(${hexToRgb(cat.color)},.15)`:"transparent",fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s"}}>
+                      {newRating[cat.key]>=n?"★":"☆"}
+                    </button>
+                  ))}
+                  <span style={{fontSize:10,color:T.faint,minWidth:38,textAlign:"right"}}>{cat.highLabel}</span>
+                </div>
+                {newRating[cat.key]>0&&<div style={{fontSize:10,color:cat.color,marginTop:4,textAlign:"center",fontWeight:600}}>{["","1 — "+cat.lowLabel,"2","3 — Okay","4",`5 — ${cat.highLabel}`][newRating[cat.key]]}</div>}
+              </div>
+            ))}
+            <div style={{marginBottom:14,padding:"12px 14px",background:T.subcard,borderRadius:10,border:`1px solid ${T.border2}`}}>
+              <div style={{fontWeight:600,fontSize:13,marginBottom:8}}>Would you take this professor again?</div>
+              <div style={{display:"flex",gap:10}}>
+                {[{v:true,label:"Yes! 👍"},{v:false,label:"No 👎"}].map(opt=>(
+                  <button key={String(opt.v)} onClick={()=>setNewRating(r=>({...r,wouldTakeAgain:opt.v}))} style={{flex:1,padding:"10px",borderRadius:9,border:`2px solid ${newRating.wouldTakeAgain===opt.v?(opt.v?T.success:T.danger):T.border2}`,background:newRating.wouldTakeAgain===opt.v?(opt.v?`rgba(${hexToRgb(T.success)},.1)`:`rgba(${hexToRgb(T.danger)},.1)`):"transparent",color:newRating.wouldTakeAgain===opt.v?(opt.v?T.success:T.danger):T.muted,fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit",transition:"all .2s"}}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{marginBottom:16}}>
+              <div style={{fontSize:11,color:T.muted,marginBottom:4}}>Leave a comment <span style={{color:T.faint}}>(optional — visible to peers)</span></div>
+              <textarea className="ifield" rows={2} placeholder="Tips for future students taking this professor..." value={newRating.comment} onChange={e=>setNewRating(r=>({...r,comment:e.target.value}))} style={{resize:"vertical",fontSize:12}}/>
+            </div>
+            <div style={{display:"flex",gap:9}}>
+              <button className="bg2" style={{flex:1}} onClick={()=>setShowRateModal(null)}>Cancel</button>
+              <button className="bp" style={{flex:1}} onClick={submitProfRating}>Submit Rating</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ═══ CONFIRM MODAL ═══ */}
       {confirmModal&&(
