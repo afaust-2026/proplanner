@@ -226,7 +226,7 @@ function AuthScreen({onAuth}){
       <div style={{width:"min(90vw,420px)",padding:"40px 36px",background:"#16161f",borderRadius:20,border:"1px solid #2a2a38",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
         <div style={{textAlign:"center",marginBottom:30}}>
           <div style={{fontSize:44,marginBottom:10}}>🎓</div>
-          <div style={{fontSize:26,fontWeight:700,color:"#e8e3d8"}}>ProPlanner</div>
+          <div style={{fontSize:26,fontWeight:700,color:"#e8e3d8"}}>ProPlan Scholar</div>
           <div style={{fontSize:13,color:"#7a7590",marginTop:5}}>Your personalized academic planner</div>
         </div>
         <div style={{display:"flex",background:"#0f0f13",borderRadius:10,padding:3,marginBottom:24,border:"1px solid #2a2a38"}}>
@@ -389,7 +389,7 @@ function Onboarding({user,onComplete}){
           {p.is_greek&&<div style={{marginTop:4}}>🏛 We will add blocks for {p.greek_org} activities.</div>}
         </div>
       </div>
-      {nextBtn("Launch ProPlanner 🚀",false,finish)}
+      {nextBtn("Launch ProPlan Scholar 🚀",false,finish)}
     </>}
   </>);
 
@@ -397,7 +397,7 @@ function Onboarding({user,onComplete}){
 }
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
-export default function ProPlanner(){
+export default function ProPlanScholar(){
   const t=today();
 
   // Auth state
@@ -463,7 +463,7 @@ export default function ProPlanner(){
   const[cardFlipped,setCardFlipped]=useState(false);
   const[studyMode,setStudyMode]=useState(false);
 
-  // RMP + ProPlanner professor ratings state
+  // RMP + ProPlan Scholar professor ratings state
   const[rmpResults,setRmpResults]=useState({});
   const[profRatings,setProfRatings]=useState([]); // community ratings from all users
   const[showRateModal,setShowRateModal]=useState(null); // {courseId, profName}
@@ -472,7 +472,7 @@ export default function ProPlanner(){
   const[profSearch,setProfSearch]=useState("");
 
   // Chat state
-  const[chatMessages,setChatMessages]=useState([{role:"assistant",content:"Hi! I am your ProPlanner AI assistant. I know your schedule, courses, and commitments. Ask me anything!"}]);
+  const[chatMessages,setChatMessages]=useState([{role:"assistant",content:"Hi! I am your ProPlan Scholar AI assistant. I know your schedule, courses, and commitments. Ask me anything!"}]);
   const[chatInput,setChatInput]=useState("");
   const[chatLoading,setChatLoading]=useState(false);
   const chatEndRef=useRef(null);
@@ -1176,7 +1176,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
 
   if(authLoading)return(
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#0f0f13",fontFamily:"'Inter',system-ui,sans-serif"}}>
-      <div style={{textAlign:"center"}}><div style={{fontSize:40,marginBottom:16}}>🎓</div><div style={{color:"#7a7590",fontSize:14}}>Loading ProPlanner...</div></div>
+      <div style={{textAlign:"center"}}><div style={{fontSize:40,marginBottom:16}}>🎓</div><div style={{color:"#7a7590",fontSize:14}}>Loading ProPlan Scholar...</div></div>
     </div>
   );
 
@@ -1212,7 +1212,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
           <div style={{padding:"14px 9px 12px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:sidebarOpen?"space-between":"center",background:`linear-gradient(135deg,rgba(${rgb},.12),rgba(${rgb},.04))`}}>
             {sidebarOpen&&<div style={{overflow:"hidden",marginRight:5}}>
               <div style={{fontSize:9,letterSpacing:3,color:T.accent,textTransform:"uppercase",fontWeight:700,whiteSpace:"nowrap"}}>{uni.abbr} · {profile.full_name?.split(" ")[0]}</div>
-              <div style={{fontSize:17,fontWeight:700,color:T.text,whiteSpace:"nowrap"}}>{uni.logo} ProPlanner</div>
+              <div style={{fontSize:17,fontWeight:700,color:T.text,whiteSpace:"nowrap"}}>{uni.logo} ProPlan Scholar</div>
               {uni.mascot&&<div style={{fontSize:9,color:T.faint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{uni.mascot}</div>}
             </div>}
             <button onClick={()=>setSidebar(o=>!o)} style={{background:"transparent",border:`1px solid ${T.border2}`,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",color:T.muted,fontSize:11,flexShrink:0}}>{sidebarOpen?"←":"→"}</button>
@@ -1525,7 +1525,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                   <div style={{fontSize:56,marginBottom:16}}>📚</div>
                   <div style={{fontWeight:700,fontSize:18,marginBottom:10,color:T.text}}>No assignments yet</div>
                   <div style={{fontSize:13,marginBottom:24,lineHeight:1.7,color:T.muted}}>
-                    Upload a syllabus and ProPlanner will automatically extract all your assignments, due dates, and estimated study hours — no manual entry needed.
+                    Upload a syllabus and ProPlan Scholar will automatically extract all your assignments, due dates, and estimated study hours — no manual entry needed.
                   </div>
                   <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap",marginBottom:16}}>
                     <label style={{cursor:"pointer"}}><input type="file" accept=".txt,.pdf,.docx" onChange={handleSyllabusUpload} style={{display:"none"}}/><span className="bp" style={{display:"inline-block",padding:"10px 20px",fontSize:13}}>📄 Upload Syllabus</span></label>
@@ -1646,11 +1646,11 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                           <div style={{fontSize:10,color:T.faint,marginTop:3}}>Add professor name to search peer ratings</div>
                         </div>}
 
-                        {/* Community ratings from ProPlanner peers */}
+                        {/* Community ratings from ProPlan Scholar peers */}
                         {stats?(
                           <div style={{background:`rgba(${hexToRgb(T.success)},.06)`,borderRadius:9,padding:"10px 12px",marginBottom:7,border:`1px solid rgba(${hexToRgb(T.success)},.2)`}}>
                             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}>
-                              <div style={{fontSize:11,fontWeight:700,color:T.success}}>🎓 ProPlanner Peer Ratings</div>
+                              <div style={{fontSize:11,fontWeight:700,color:T.success}}>🎓 ProPlan Scholar Peer Ratings</div>
                               <span style={{fontSize:10,color:T.muted}}>{stats.count} rating{stats.count>1?"s":""}</span>
                             </div>
                             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:5,marginBottom:7}}>
@@ -1747,7 +1747,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                 <button className="bp" onClick={()=>setShowAddBlock(true)}>+ Add Block</button>
               </div>
               <div style={{fontSize:12,color:T.muted,marginBottom:12,padding:"10px 14px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`}}>
-                These blocks tell ProPlanner when you are <strong>NOT</strong> available to study — practices, games, chapter meetings, work, etc. Study sessions are automatically placed around them.
+                These blocks tell ProPlan Scholar when you are <strong>NOT</strong> available to study — practices, games, chapter meetings, work, etc. Study sessions are automatically placed around them.
               </div>
 
               {/* Work schedule — only shown for working professionals */}
@@ -2214,7 +2214,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
         <div className="mo" onClick={()=>setShowRateModal(null)}>
           <div className="md fi" onClick={e=>e.stopPropagation()} style={{maxWidth:440}}>
             <div style={{marginBottom:16}}>
-              <div style={{fontSize:10,letterSpacing:2,color:T.accent,textTransform:"uppercase",marginBottom:4}}>ProPlanner Peer Ratings</div>
+              <div style={{fontSize:10,letterSpacing:2,color:T.accent,textTransform:"uppercase",marginBottom:4}}>ProPlan Scholar Peer Ratings</div>
               <div style={{fontWeight:700,fontSize:18,marginBottom:2}}>Rate {showRateModal.profName}</div>
               <div style={{fontSize:12,color:T.muted}}>{showRateModal.courseName} · {uni.name}</div>
             </div>
