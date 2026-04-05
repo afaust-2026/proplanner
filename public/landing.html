@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>ProPlanner — The Academic Planner Built for Real Students</title>
+  <meta name="description" content="ProPlanner is the AI-powered academic planner designed for working professionals, student-athletes, and doctoral students. Balance classes, work, sports, and life — all in one place."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --ink: #0e0e14;
+      --paper: #f7f5f0;
+      --cream: #f0ece3;
+      --accent: #c75b12;
+      --accent2: #6366f1;
+      --muted: #6b6560;
+      --border: rgba(0,0,0,.08);
+      --card: #ffffff;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    html{scroll-behavior:smooth;}
+    body{font-family:'DM Sans',system-ui,sans-serif;background:var(--paper);color:var(--ink);overflow-x:hidden;}
+    a{color:inherit;text-decoration:none;}
+
+    /* ── NAV ── */
+    nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:16px 5vw;display:flex;align-items:center;justify-content:space-between;background:rgba(247,245,240,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);}
+    .nav-logo{font-family:'Instrument Serif',serif;font-size:22px;letter-spacing:-.3px;display:flex;align-items:center;gap:8px;}
+    .nav-logo span{font-size:24px;}
+    .nav-links{display:flex;align-items:center;gap:32px;}
+    .nav-links a{font-size:14px;font-weight:500;color:var(--muted);transition:color .2s;}
+    .nav-links a:hover{color:var(--ink);}
+    .nav-cta{background:var(--ink);color:#fff;padding:9px 20px;border-radius:100px;font-size:13px;font-weight:600;transition:all .2s;white-space:nowrap;}
+    .nav-cta:hover{background:var(--accent);transform:translateY(-1px);}
+    .nav-signin{font-size:13px;font-weight:500;color:var(--muted);transition:color .2s;}
+    .nav-signin:hover{color:var(--ink);}
+
+    /* ── HERO ── */
+    .hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:120px 5vw 80px;position:relative;overflow:hidden;}
+    .hero-bg{position:absolute;inset:0;background:radial-gradient(ellipse 80% 50% at 50% -10%,rgba(199,91,18,.08),transparent),radial-gradient(ellipse 60% 40% at 80% 80%,rgba(99,102,241,.06),transparent);pointer-events:none;}
+    .hero-eyebrow{display:inline-flex;align-items:center;gap:8px;background:var(--cream);border:1px solid var(--border);border-radius:100px;padding:6px 14px;font-size:12px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--accent);margin-bottom:28px;}
+    .hero-eyebrow::before{content:'';width:6px;height:6px;background:var(--accent);border-radius:50%;display:inline-block;}
+    h1{font-family:'Instrument Serif',serif;font-size:clamp(42px,7vw,88px);line-height:1.05;letter-spacing:-2px;margin-bottom:24px;max-width:14ch;}
+    h1 em{font-style:italic;color:var(--accent);}
+    .hero-sub{font-size:clamp(15px,2vw,19px);color:var(--muted);line-height:1.7;max-width:52ch;margin:0 auto 40px;}
+    .hero-actions{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-bottom:60px;}
+    .btn-primary{background:var(--ink);color:#fff;padding:14px 28px;border-radius:100px;font-size:15px;font-weight:600;transition:all .25s;display:inline-flex;align-items:center;gap:8px;}
+    .btn-primary:hover{background:var(--accent);transform:translateY(-2px);box-shadow:0 8px 30px rgba(199,91,18,.25);}
+    .btn-secondary{background:transparent;color:var(--ink);padding:14px 28px;border-radius:100px;font-size:15px;font-weight:500;border:1.5px solid var(--border);transition:all .25s;}
+    .btn-secondary:hover{border-color:var(--ink);background:var(--cream);}
+    .hero-proof{display:flex;align-items:center;gap:20px;justify-content:center;font-size:13px;color:var(--muted);}
+    .hero-proof-divider{width:4px;height:4px;background:var(--muted);border-radius:50%;opacity:.4;}
+
+    /* ── SCHOOL STRIP ── */
+    .schools{padding:32px 5vw;border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:var(--cream);}
+    .schools-label{text-align:center;font-size:12px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin-bottom:20px;}
+    .schools-row{display:flex;flex-wrap:wrap;justify-content:center;gap:10px 20px;}
+    .school-pill{display:flex;align-items:center;gap:6px;padding:6px 14px;background:#fff;border:1px solid var(--border);border-radius:100px;font-size:13px;font-weight:500;color:var(--muted);}
+
+    /* ── PROBLEM SECTION ── */
+    .problem{padding:100px 5vw;max-width:1100px;margin:0 auto;}
+    .section-label{font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--accent);margin-bottom:16px;}
+    h2{font-family:'Instrument Serif',serif;font-size:clamp(32px,4.5vw,56px);line-height:1.1;letter-spacing:-1.5px;margin-bottom:20px;}
+    h2 em{font-style:italic;color:var(--accent);}
+    .problem-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px;margin-top:50px;border-radius:16px;overflow:hidden;border:1px solid var(--border);}
+    .problem-card{padding:32px;background:#fff;}
+    .problem-card:nth-child(odd){background:var(--cream);}
+    .problem-icon{font-size:28px;margin-bottom:12px;}
+    .problem-card h3{font-family:'Instrument Serif',serif;font-size:22px;margin-bottom:8px;letter-spacing:-.3px;}
+    .problem-card p{font-size:14px;color:var(--muted);line-height:1.7;}
+
+    /* ── FEATURES ── */
+    .features{padding:100px 5vw;background:var(--ink);color:#f0ece3;}
+    .features-inner{max-width:1100px;margin:0 auto;}
+    .features .section-label{color:#c75b12;}
+    .features h2{color:#f0ece3;}
+    .features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:56px;}
+    .feature-card{padding:28px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;transition:all .25s;}
+    .feature-card:hover{background:rgba(255,255,255,.07);transform:translateY(-3px);}
+    .feature-icon{font-size:28px;margin-bottom:16px;}
+    .feature-card h3{font-size:17px;font-weight:600;margin-bottom:8px;color:#f0ece3;}
+    .feature-card p{font-size:13px;color:rgba(240,236,227,.55);line-height:1.7;}
+    .feature-highlight{grid-column:span 2;background:rgba(199,91,18,.12);border-color:rgba(199,91,18,.25);}
+    .feature-highlight h3{font-family:'Instrument Serif',serif;font-size:24px;letter-spacing:-.3px;}
+    .feature-highlight p{font-size:14px;color:rgba(240,236,227,.7);}
+
+    /* ── WHO IT'S FOR ── */
+    .personas{padding:100px 5vw;max-width:1100px;margin:0 auto;}
+    .personas-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:50px;}
+    .persona-card{padding:28px 24px;background:#fff;border:1px solid var(--border);border-radius:16px;transition:all .25s;}
+    .persona-card:hover{border-color:var(--accent);transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,.08);}
+    .persona-emoji{font-size:36px;margin-bottom:14px;}
+    .persona-card h3{font-size:16px;font-weight:700;margin-bottom:8px;}
+    .persona-card p{font-size:13px;color:var(--muted);line-height:1.6;}
+
+    /* ── HOW IT WORKS ── */
+    .how{padding:100px 5vw;background:var(--cream);}
+    .how-inner{max-width:900px;margin:0 auto;}
+    .steps{display:flex;flex-direction:column;gap:0;margin-top:56px;}
+    .step{display:grid;grid-template-columns:64px 1fr;gap:24px;padding:32px 0;border-bottom:1px solid var(--border);align-items:start;}
+    .step:last-child{border-bottom:none;}
+    .step-num{width:48px;height:48px;background:var(--ink);color:#fff;border-radius:14px;display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',serif;font-size:22px;flex-shrink:0;margin-top:4px;}
+    .step-content h3{font-size:18px;font-weight:700;margin-bottom:6px;}
+    .step-content p{font-size:14px;color:var(--muted);line-height:1.7;}
+
+    /* ── STATS ── */
+    .stats{padding:80px 5vw;background:var(--accent);color:#fff;}
+    .stats-inner{max-width:900px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:32px;text-align:center;}
+    .stat-num{font-family:'Instrument Serif',serif;font-size:52px;line-height:1;letter-spacing:-2px;margin-bottom:6px;}
+    .stat-label{font-size:13px;opacity:.8;font-weight:500;}
+
+    /* ── TESTIMONIALS ── */
+    .testimonials{padding:100px 5vw;max-width:1100px;margin:0 auto;}
+    .testimonials-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:50px;}
+    .testimonial{padding:28px;background:#fff;border:1px solid var(--border);border-radius:16px;}
+    .testimonial-text{font-family:'Instrument Serif',serif;font-size:18px;line-height:1.5;letter-spacing:-.2px;margin-bottom:20px;color:var(--ink);}
+    .testimonial-author{display:flex;align-items:center;gap:12px;}
+    .testimonial-avatar{width:38px;height:38px;border-radius:50%;background:var(--cream);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:16px;}
+    .testimonial-name{font-size:13px;font-weight:600;}
+    .testimonial-title{font-size:12px;color:var(--muted);}
+
+    /* ── PRICING ── */
+    .pricing{padding:100px 5vw;background:var(--ink);color:#f0ece3;}
+    .pricing-inner{max-width:900px;margin:0 auto;}
+    .pricing .section-label{color:var(--accent);}
+    .pricing h2{color:#f0ece3;}
+    .pricing-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:50px;}
+    .price-card{padding:36px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:20px;}
+    .price-card.featured{background:var(--accent);border-color:transparent;}
+    .price-badge{display:inline-block;background:rgba(255,255,255,.15);color:#fff;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:3px 10px;border-radius:100px;margin-bottom:16px;}
+    .price-amount{font-family:'Instrument Serif',serif;font-size:52px;letter-spacing:-2px;line-height:1;margin-bottom:4px;}
+    .price-period{font-size:14px;opacity:.6;margin-bottom:20px;}
+    .price-desc{font-size:14px;opacity:.7;line-height:1.6;margin-bottom:28px;}
+    .price-features{display:flex;flex-direction:column;gap:10px;margin-bottom:32px;}
+    .price-feature{display:flex;align-items:center;gap:10px;font-size:14px;}
+    .price-feature::before{content:'✓';font-weight:700;color:rgba(255,255,255,.6);flex-shrink:0;}
+    .price-card.featured .price-feature::before{color:#fff;}
+    .price-btn{display:block;width:100%;padding:14px;text-align:center;border-radius:100px;font-size:14px;font-weight:600;transition:all .2s;background:#fff;color:var(--ink);}
+    .price-card.featured .price-btn{background:var(--ink);color:#fff;}
+    .price-btn:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.2);}
+
+    /* ── CTA BANNER ── */
+    .cta-banner{padding:100px 5vw;text-align:center;}
+    .cta-banner h2{font-family:'Instrument Serif',serif;font-size:clamp(36px,5vw,64px);line-height:1.1;letter-spacing:-2px;max-width:14ch;margin:0 auto 20px;}
+    .cta-banner h2 em{font-style:italic;color:var(--accent);}
+    .cta-banner p{font-size:17px;color:var(--muted);margin-bottom:36px;}
+
+    /* ── FOOTER ── */
+    footer{background:var(--ink);color:rgba(240,236,227,.5);padding:48px 5vw;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;}
+    .footer-logo{font-family:'Instrument Serif',serif;font-size:20px;color:#f0ece3;}
+    footer p{font-size:13px;}
+    .footer-links{display:flex;gap:24px;}
+    .footer-links a{font-size:13px;transition:color .2s;}
+    .footer-links a:hover{color:#f0ece3;}
+
+    /* ── ANIMATIONS ── */
+    @keyframes fadeUp{from{opacity:0;transform:translateY(24px);}to{opacity:1;transform:translateY(0);}}
+    @keyframes float{0%,100%{transform:translateY(0);}50%{transform:translateY(-8px);}}
+    .fade-up{animation:fadeUp .7s ease both;}
+    .fade-up-2{animation:fadeUp .7s .15s ease both;}
+    .fade-up-3{animation:fadeUp .7s .3s ease both;}
+    .float{animation:float 4s ease-in-out infinite;}
+
+    /* ── APP PREVIEW ── */
+    .app-preview{margin:0 auto 0;max-width:860px;width:calc(100% - 40px);background:var(--ink);border-radius:20px;overflow:hidden;box-shadow:0 40px 100px rgba(0,0,0,.25),0 0 0 1px rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);}
+    .app-bar{padding:12px 16px;background:#0d0d18;display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(255,255,255,.06);}
+    .app-dot{width:10px;height:10px;border-radius:50%;}
+    .app-preview-inner{display:grid;grid-template-columns:180px 1fr;min-height:360px;}
+    .app-sidebar-demo{background:#0d0d18;padding:16px 12px;border-right:1px solid rgba(255,255,255,.06);}
+    .app-sidebar-brand{font-family:'Instrument Serif',serif;font-size:16px;color:#f0ece3;padding:8px 4px 16px;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:10px;}
+    .app-nav-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:7px;font-size:12px;color:rgba(240,236,227,.45);margin-bottom:2px;}
+    .app-nav-item.active{background:rgba(199,91,18,.15);color:#f5a623;}
+    .app-main-demo{padding:20px;background:#0f0f1a;}
+    .app-demo-title{font-size:11px;color:rgba(240,236,227,.3);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;}
+    .app-demo-h{font-family:'Instrument Serif',serif;font-size:22px;color:#f0ece3;margin-bottom:16px;}
+    .app-stat-row{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:16px;}
+    .app-stat{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:10px 8px;text-align:center;}
+    .app-stat-num{font-size:18px;font-weight:700;color:#c75b12;}
+    .app-stat-label{font-size:8px;color:rgba(240,236,227,.3);margin-top:2px;text-transform:uppercase;letter-spacing:.5px;}
+    .app-cards{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    .app-card-demo{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:12px;}
+    .app-card-label{font-size:9px;color:rgba(240,236,227,.3);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+    .app-deadline{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04);}
+    .app-deadline-dot{width:3px;height:20px;border-radius:2px;flex-shrink:0;}
+    .app-deadline-title{font-size:11px;color:rgba(240,236,227,.7);}
+    .app-deadline-days{font-size:10px;font-weight:700;margin-left:auto;}
+
+    /* ── MOBILE ── */
+    @media(max-width:768px){
+      .problem-grid{grid-template-columns:1fr;}
+      .features-grid{grid-template-columns:1fr;}
+      .feature-highlight{grid-column:span 1;}
+      .personas-grid{grid-template-columns:1fr 1fr;}
+      .testimonials-grid{grid-template-columns:1fr;}
+      .pricing-grid{grid-template-columns:1fr;}
+      .stats-inner{grid-template-columns:1fr 1fr;}
+      .app-preview-inner{grid-template-columns:1fr;}
+      .app-sidebar-demo{display:none;}
+      .nav-links{display:none;}
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo"><span>☄️</span> ProPlanner</div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#who">Who It's For</a>
+    <a href="#how">How It Works</a>
+    <a href="#pricing">Pricing</a>
+  </div>
+  <div style="display:flex;align-items:center;gap:16px;">
+    <a href="/app" class="nav-signin">Sign In</a>
+    <a href="/app" class="nav-cta">Get Started Free →</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-eyebrow fade-up">AI-Powered Academic Planner</div>
+  <h1 class="fade-up-2">Plan smarter.<br/><em>Study better.</em><br/>Live balanced.</h1>
+  <p class="hero-sub fade-up-3">ProPlanner is the only planner built specifically for busy students — working professionals, student-athletes, doctoral candidates, and Greek life members — who need to balance everything at once.</p>
+  <div class="hero-actions fade-up-3">
+    <a href="/app" class="btn-primary">Start Free Today <span>→</span></a>
+    <a href="#how" class="btn-secondary">See How It Works</a>
+  </div>
+  <div class="hero-proof fade-up-3">
+    <span>✓ Free to start</span>
+    <span class="hero-proof-divider"></span>
+    <span>✓ AI syllabus import</span>
+    <span class="hero-proof-divider"></span>
+    <span>✓ No credit card required</span>
+  </div>
+
+  <!-- App Preview -->
+  <div class="app-preview float" style="margin-top:60px;">
+    <div class="app-bar">
+      <div class="app-dot" style="background:#ff5f57;"></div>
+      <div class="app-dot" style="background:#febc2e;"></div>
+      <div class="app-dot" style="background:#28c840;"></div>
+      <span style="font-size:12px;color:rgba(255,255,255,.25);margin-left:8px;">academicplan.pro</span>
+    </div>
+    <div class="app-preview-inner">
+      <div class="app-sidebar-demo">
+        <div class="app-sidebar-brand">☄️ ProPlanner</div>
+        <div class="app-nav-item active">◈ Dashboard</div>
+        <div class="app-nav-item">◷ Calendar</div>
+        <div class="app-nav-item">◉ Assignments <span style="background:#ef4444;color:#fff;border-radius:10px;font-size:9px;padding:1px 5px;margin-left:auto;">2</span></div>
+        <div class="app-nav-item">◎ Courses</div>
+        <div class="app-nav-item">⊞ My Schedule</div>
+        <div class="app-nav-item">⬟ Dissertation</div>
+        <div class="app-nav-item">⬡ Flashcards</div>
+        <div class="app-nav-item">◌ Settings</div>
+      </div>
+      <div class="app-main-demo">
+        <div class="app-demo-title">Welcome back, Angela</div>
+        <div class="app-demo-h">Your Dashboard</div>
+        <div class="app-stat-row">
+          <div class="app-stat"><div class="app-stat-num">4</div><div class="app-stat-label">Courses</div></div>
+          <div class="app-stat"><div class="app-stat-num" style="color:#f97316;">7</div><div class="app-stat-label">Pending</div></div>
+          <div class="app-stat"><div class="app-stat-num" style="color:#0ea5e9;">12</div><div class="app-stat-label">Study Hrs</div></div>
+          <div class="app-stat"><div class="app-stat-num" style="color:#a78bfa;">3</div><div class="app-stat-label">Milestones</div></div>
+          <div class="app-stat"><div class="app-stat-num" style="color:#22c55e;">5</div><div class="app-stat-label">Done</div></div>
+        </div>
+        <div class="app-cards">
+          <div class="app-card-demo">
+            <div class="app-card-label">Upcoming Deadlines</div>
+            <div class="app-deadline"><div class="app-deadline-dot" style="background:#6366f1;"></div><div><div class="app-deadline-title">Literature Review</div><div style="font-size:9px;color:rgba(240,236,227,.3);">BCOM 6301</div></div><div class="app-deadline-days" style="color:#ef4444;">2d</div></div>
+            <div class="app-deadline"><div class="app-deadline-dot" style="background:#0ea5e9;"></div><div><div class="app-deadline-title">Case Analysis</div><div style="font-size:9px;color:rgba(240,236,227,.3);">BCOM 6302</div></div><div class="app-deadline-days" style="color:#f97316;">5d</div></div>
+            <div class="app-deadline" style="border:none;"><div class="app-deadline-dot" style="background:#ec4899;"></div><div><div class="app-deadline-title">Midterm Exam</div><div style="font-size:9px;color:rgba(240,236,227,.3);">BCOM 6303</div></div><div class="app-deadline-days" style="color:#eab308;">9d</div></div>
+          </div>
+          <div class="app-card-demo">
+            <div class="app-card-label">Today's Study Sessions</div>
+            <div class="app-deadline"><div style="font-size:14px;">📚</div><div><div class="app-deadline-title">Study: Literature Review</div><div style="font-size:9px;color:rgba(240,236,227,.3);">6:00 PM – 8:00 PM</div></div></div>
+            <div class="app-deadline" style="border:none;"><div style="font-size:14px;">📚</div><div><div class="app-deadline-title">Study: Case Analysis</div><div style="font-size:9px;color:rgba(240,236,227,.3);">8:00 PM – 10:00 PM</div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SCHOOLS -->
+<div class="schools">
+  <div class="schools-label">Designed for students at top programs including</div>
+  <div class="schools-row">
+    <div class="school-pill">☄️ UT Dallas</div>
+    <div class="school-pill">📕 Harvard</div>
+    <div class="school-pill">🎩 Wharton</div>
+    <div class="school-pill">🦫 MIT Sloan</div>
+    <div class="school-pill">🌲 Stanford GSB</div>
+    <div class="school-pill">😈 Duke Fuqua</div>
+    <div class="school-pill">🦡 Michigan Ross</div>
+    <div class="school-pill">🐱 Northwestern</div>
+    <div class="school-pill">🐴 SMU Cox</div>
+    <div class="school-pill">🐸 TCU Neeley</div>
+    <div class="school-pill">🤠 UT Austin</div>
+    <div class="school-pill">+ Any School</div>
+  </div>
+</div>
+
+<!-- PROBLEM -->
+<section class="problem">
+  <div class="section-label">The Problem</div>
+  <h2>Most planners were built for<br/><em>simple schedules.</em></h2>
+  <p style="font-size:16px;color:var(--muted);line-height:1.7;max-width:55ch;">Your life isn't simple. You're juggling classes, a full-time job, practice schedules, chapter meetings, and a dissertation. Generic tools don't understand that.</p>
+  <div class="problem-grid">
+    <div class="problem-card">
+      <div class="problem-icon">📅</div>
+      <h3>Google Calendar doesn't know about your workload</h3>
+      <p>You can block off time, but nothing tells you how much time you actually need to prepare for each assignment based on difficulty.</p>
+    </div>
+    <div class="problem-card">
+      <div class="problem-icon">📋</div>
+      <h3>Todo apps don't understand your schedule conflicts</h3>
+      <p>When you have basketball practice Monday and Wednesday and work Thursday-Friday, your study sessions need to fit around all of it automatically.</p>
+    </div>
+    <div class="problem-card">
+      <div class="problem-icon">😰</div>
+      <h3>You're probably over-committed without knowing it</h3>
+      <p>Research shows performance drops sharply above 65 hours per week. Most students don't know how many hours they're actually committing to.</p>
+    </div>
+    <div class="problem-card">
+      <div class="problem-icon">🗂️</div>
+      <h3>No tool connects syllabi to your schedule</h3>
+      <p>You spend hours manually entering assignments at the start of every semester. There has to be a better way.</p>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="features" id="features">
+  <div class="features-inner">
+    <div class="section-label">The Solution</div>
+    <h2>Everything you need.<br/>Nothing you don't.</h2>
+    <div class="features-grid">
+      <div class="feature-card feature-highlight">
+        <div class="feature-icon">🤖</div>
+        <h3>AI Syllabus Import</h3>
+        <p>Upload any PDF syllabus and ProPlanner automatically extracts every assignment, due date, professor name, and topic — in seconds. No more manual entry at the start of every semester. Just drop the file and your semester is set up.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📚</div>
+        <h3>Smart Study Scheduling</h3>
+        <p>ProPlanner automatically schedules study sessions around your work hours, practices, meetings, and blackout dates. It even accounts for professor difficulty ratings.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⭐</div>
+        <h3>Peer Professor Ratings</h3>
+        <p>Rate professors on quality, difficulty, and workload. See what your fellow ProPlanner students think before you register — built right into the app.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⬡</div>
+        <h3>AI Flashcard Generator</h3>
+        <p>Generate 12-16 study flashcards for any assignment in one click. Flip, mark mastered, track your progress. Your AI tutor is always available.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🏅</div>
+        <h3>Built for Complex Lives</h3>
+        <p>Student-athlete? Greek life? Working professional? Set up your sport schedule, chapter meetings, and work hours — study sessions work around everything.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🌿</div>
+        <h3>Wellness & Balance Alerts</h3>
+        <p>ProPlanner monitors your total weekly commitments and alerts you when you're overcommitted — before burnout happens. Your wellbeing matters.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⬟</div>
+        <h3>Dissertation Tracker</h3>
+        <p>For doctoral students: milestone tracking, progress visualization, weekly reflection prompts with AI feedback from a virtual doctoral advisor.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📊</div>
+        <h3>Time Tracker</h3>
+        <p>Visual breakdown of where your weekly hours go — classes, studying, work, sports, Greek life. See your free time at a glance and make informed decisions.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🎓</div>
+        <h3>University Themes</h3>
+        <p>Your app, your school's colors. 14 schools supported with official color schemes and mascots. Feels like it was made just for you.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WHO IT'S FOR -->
+<section id="who" style="padding:100px 5vw;max-width:1200px;margin:0 auto;">
+  <div class="section-label">Who It's For</div>
+  <h2>Built for students who<br/><em>do it all.</em></h2>
+  <div class="personas-grid" style="margin-top:50px;">
+    <div class="persona-card">
+      <div class="persona-emoji">💼</div>
+      <h3>Working Professionals</h3>
+      <p>In an MBA or DBA while working full time? Configure your exact work hours and study sessions schedule around your job automatically.</p>
+    </div>
+    <div class="persona-card">
+      <div class="persona-emoji">🏅</div>
+      <h3>Student Athletes</h3>
+      <p>Practice schedules, game days, travel — ProPlanner blocks all of it so your study time never overlaps with your athletic commitments.</p>
+    </div>
+    <div class="persona-card">
+      <div class="persona-emoji">🏛</div>
+      <h3>Greek Life Members</h3>
+      <p>Chapter meetings, philanthropy events, recruitment — your Greek life schedule is part of your planner, not an afterthought.</p>
+    </div>
+    <div class="persona-card">
+      <div class="persona-emoji">📕</div>
+      <h3>Doctoral Students</h3>
+      <p>Dissertation milestones, weekly reflection prompts, advisor notes, and an AI doctoral advisor available 24/7 in the chat.</p>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how" id="how">
+  <div class="how-inner">
+    <div class="section-label">How It Works</div>
+    <h2>Set up in under<br/><em>10 minutes.</em></h2>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <h3>Create your account & set your profile</h3>
+          <p>Tell ProPlanner your degree level, university, whether you're an athlete, in Greek life, or a working professional. A quick 5-step onboarding wizard handles everything.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <h3>Upload your syllabi</h3>
+          <p>Drop in your PDF syllabi and our AI extracts every assignment, due date, professor, and class schedule automatically. One upload per course and your entire semester is planned.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <h3>Configure your commitments</h3>
+          <p>Add your work schedule, practice times, chapter meeting days, or any recurring commitment. ProPlanner uses these to find your actual available study windows.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <h3>Let ProPlanner do the planning</h3>
+          <p>Your calendar fills automatically with color-coded study sessions at exact times — before work, after practice, between meetings. Nothing overlaps. Nothing is forgotten.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-content">
+          <h3>Study smarter with AI assistance</h3>
+          <p>Generate flashcards for any assignment, ask your AI assistant for study strategies, get weekly dissertation feedback, and track your progress toward completion.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- STATS -->
+<section class="stats">
+  <div class="stats-inner">
+    <div>
+      <div class="stat-num">10s</div>
+      <div class="stat-label">Average syllabus import time</div>
+    </div>
+    <div>
+      <div class="stat-num">14</div>
+      <div class="stat-label">University themes supported</div>
+    </div>
+    <div>
+      <div class="stat-num">5×</div>
+      <div class="stat-label">More schedule factors than other planners</div>
+    </div>
+    <div>
+      <div class="stat-num">24/7</div>
+      <div class="stat-label">AI study assistant always available</div>
+    </div>
+  </div>
+</section>
+
+<!-- TESTIMONIALS -->
+<section class="testimonials">
+  <div class="section-label">Early Feedback</div>
+  <h2>What students are<br/><em>saying.</em></h2>
+  <div class="testimonials-grid">
+    <div class="testimonial">
+      <div class="testimonial-text">"I uploaded my syllabus and my entire semester was planned in seconds. I've never felt this organized in a DBA program."</div>
+      <div class="testimonial-author">
+        <div class="testimonial-avatar">👩‍💼</div>
+        <div><div class="testimonial-name">DBA Student</div><div class="testimonial-title">UT Dallas, Working Professional</div></div>
+      </div>
+    </div>
+    <div class="testimonial">
+      <div class="testimonial-text">"Finally a planner that understands I have practice at 4pm every day. My study sessions actually fit in my real life now."</div>
+      <div class="testimonial-author">
+        <div class="testimonial-avatar">🏀</div>
+        <div><div class="testimonial-name">Graduate Student</div><div class="testimonial-title">Student Athlete, Business School</div></div>
+      </div>
+    </div>
+    <div class="testimonial">
+      <div class="testimonial-text">"The AI flashcard generator alone is worth it. I generate cards for every exam and my grades have genuinely improved."</div>
+      <div class="testimonial-author">
+        <div class="testimonial-avatar">📚</div>
+        <div><div class="testimonial-name">MBA Candidate</div><div class="testimonial-title">Full-time Student</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="pricing" id="pricing">
+  <div class="pricing-inner">
+    <div class="section-label">Pricing</div>
+    <h2>Simple, honest<br/><em>pricing.</em></h2>
+    <p style="font-size:16px;color:rgba(240,236,227,.55);margin-top:12px;">Start free. Upgrade when you need more.</p>
+    <div class="pricing-grid">
+      <div class="price-card">
+        <div class="price-badge">Free</div>
+        <div class="price-amount">$0</div>
+        <div class="price-period">forever</div>
+        <div class="price-desc">Everything you need to get started and manage your academic life.</div>
+        <div class="price-features">
+          <div class="price-feature">AI syllabus import (3 per semester)</div>
+          <div class="price-feature">Smart study scheduling</div>
+          <div class="price-feature">Calendar with class & study times</div>
+          <div class="price-feature">AI flashcard generator</div>
+          <div class="price-feature">Professor peer ratings</div>
+          <div class="price-feature">Wellness & balance alerts</div>
+          <div class="price-feature">14 university themes</div>
+        </div>
+        <a href="/app" class="price-btn">Get Started Free</a>
+      </div>
+      <div class="price-card featured">
+        <div class="price-badge">Pro — Coming Soon</div>
+        <div class="price-amount">$9</div>
+        <div class="price-period">per month</div>
+        <div class="price-desc">For students who want the full experience with no limits.</div>
+        <div class="price-features">
+          <div class="price-feature">Everything in Free</div>
+          <div class="price-feature">Unlimited syllabus imports</div>
+          <div class="price-feature">Outlook & Google Calendar sync</div>
+          <div class="price-feature">SMS deadline reminders</div>
+          <div class="price-feature">Canvas / LMS integration</div>
+          <div class="price-feature">Priority AI assistant</div>
+          <div class="price-feature">Advanced analytics & reporting</div>
+        </div>
+        <a href="/app" class="price-btn">Join Waitlist →</a>
+      </div>
+    </div>
+    <p style="text-align:center;font-size:13px;color:rgba(240,236,227,.35);margin-top:24px;">University cohort licensing available for programs with 20+ students. <a href="mailto:hello@academicplan.pro" style="color:rgba(240,236,227,.55);">Contact us →</a></p>
+  </div>
+</section>
+
+<!-- CTA BANNER -->
+<section class="cta-banner">
+  <div class="section-label" style="text-align:center;">Get Started</div>
+  <h2>Your most organized<br/><em>semester starts now.</em></h2>
+  <p>Join students who are studying smarter, staying balanced, and actually finishing their degrees.</p>
+  <a href="/app" class="btn-primary" style="display:inline-flex;">Create Your Free Account →</a>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">☄️ ProPlanner</div>
+  <p>© 2026 ProPlanner. Built for students who do it all.</p>
+  <div class="footer-links">
+    <a href="/app">Sign In</a>
+    <a href="#features">Features</a>
+    <a href="#pricing">Pricing</a>
+    <a href="mailto:hello@academicplan.pro">Contact</a>
+  </div>
+</footer>
+
+</body>
+</html>
