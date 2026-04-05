@@ -23,21 +23,36 @@ function hexToRgb(hex){try{const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.sl
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const UNIVERSITIES=[
-  {id:"utd",name:"UT Dallas",abbr:"UTD",primary:"#C75B12",secondary:"#154734",accent:"#F5A623",logo:"🔱"},
-  {id:"harvard",name:"Harvard University",abbr:"HBS",primary:"#A51C30",secondary:"#1E1E1E",accent:"#C0A060",logo:"🎓"},
-  {id:"wharton",name:"Wharton / UPenn",abbr:"PENN",primary:"#011F5B",secondary:"#990000",accent:"#C0A060",logo:"🦅"},
-  {id:"mit",name:"MIT Sloan",abbr:"MIT",primary:"#750014",secondary:"#8A8B8C",accent:"#A31F34",logo:"⚙️"},
-  {id:"stanford",name:"Stanford GSB",abbr:"GSB",primary:"#8C1515",secondary:"#4D4F53",accent:"#B6B1A9",logo:"🌲"},
-  {id:"chicago",name:"U Chicago Booth",abbr:"BOOTH",primary:"#800000",secondary:"#767676",accent:"#FFA500",logo:"🏛"},
-  {id:"kellogg",name:"Northwestern Kellogg",abbr:"KSM",primary:"#4E2A84",secondary:"#716C6B",accent:"#B6ACD1",logo:"🐾"},
-  {id:"ross",name:"U Michigan Ross",abbr:"ROSS",primary:"#00274C",secondary:"#FFCB05",accent:"#FFCB05",logo:"〽️"},
-  {id:"fuqua",name:"Duke Fuqua",abbr:"FUQUA",primary:"#012169",secondary:"#C84E00",accent:"#E89923",logo:"👿"},
-  {id:"tuck",name:"Dartmouth Tuck",abbr:"TUCK",primary:"#00693E",secondary:"#12312B",accent:"#64A70B",logo:"🌲"},
-  {id:"mccombs",name:"UT Austin McCombs",abbr:"UTSB",primary:"#BF5700",secondary:"#333F48",accent:"#F8971F",logo:"🤘"},
-  {id:"cox",name:"SMU Cox",abbr:"SMU",primary:"#CC0035",secondary:"#354CA1",accent:"#F5A623",logo:"🐎"},
-  {id:"neeley",name:"TCU Neeley",abbr:"TCU",primary:"#4D1979",secondary:"#A3A9AC",accent:"#C9B765",logo:"🐸"},
-  {id:"olin",name:"Wash U Olin",abbr:"OLIN",primary:"#A51417",secondary:"#101820",accent:"#C69214",logo:"🐻"},
-  {id:"custom",name:"Other / Custom",abbr:"MY",primary:"#6366f1",secondary:"#0ea5e9",accent:"#f59e0b",logo:"🎓"},
+  // UTD — Comets, mascot Temoc (comet spelled backwards). Comet emoji ☄️
+  {id:"utd",name:"UT Dallas",abbr:"UTD",primary:"#C75B12",secondary:"#154734",accent:"#F5A623",logo:"☄️",mascot:"Temoc the Comet"},
+  // Harvard — The Crimson, John Harvard. No official mascot; use classic book/crimson
+  {id:"harvard",name:"Harvard University",abbr:"HBS",primary:"#A51C30",secondary:"#1E1E1E",accent:"#C0A060",logo:"📕",mascot:"The Crimson"},
+  // Wharton/UPenn — The Quakers, Ben Franklin
+  {id:"wharton",name:"Wharton / UPenn",abbr:"PENN",primary:"#011F5B",secondary:"#990000",accent:"#C0A060",logo:"🎩",mascot:"The Quakers"},
+  // MIT — Engineers, Tim the Beaver
+  {id:"mit",name:"MIT Sloan",abbr:"MIT",primary:"#750014",secondary:"#8A8B8C",accent:"#A31F34",logo:"🦫",mascot:"Tim the Beaver"},
+  // Stanford — Cardinal (color, not bird), The Tree (unofficial but famous)
+  {id:"stanford",name:"Stanford GSB",abbr:"GSB",primary:"#8C1515",secondary:"#4D4F53",accent:"#B6B1A9",logo:"🌲",mascot:"The Cardinal"},
+  // U Chicago — Maroons, the Phoenix
+  {id:"chicago",name:"U Chicago Booth",abbr:"BOOTH",primary:"#800000",secondary:"#767676",accent:"#FFA500",logo:"🦅",mascot:"The Maroons"},
+  // Northwestern Kellogg — Wildcats, Willie the Wildcat
+  {id:"kellogg",name:"Northwestern Kellogg",abbr:"KSM",primary:"#4E2A84",secondary:"#716C6B",accent:"#B6ACD1",logo:"🐱",mascot:"Willie the Wildcat"},
+  // Michigan Ross — Wolverines
+  {id:"ross",name:"U Michigan Ross",abbr:"ROSS",primary:"#00274C",secondary:"#FFCB05",accent:"#FFCB05",logo:"🦡",mascot:"Biff the Wolverine"},
+  // Duke Fuqua — Blue Devils
+  {id:"fuqua",name:"Duke Fuqua",abbr:"FUQUA",primary:"#012169",secondary:"#C84E00",accent:"#E89923",logo:"😈",mascot:"Blue Devil"},
+  // Dartmouth Tuck — Big Green, Keggy (unofficial). Use pine tree (Big Green)
+  {id:"tuck",name:"Dartmouth Tuck",abbr:"TUCK",primary:"#00693E",secondary:"#12312B",accent:"#64A70B",logo:"🌲",mascot:"Big Green"},
+  // UT Austin McCombs — Longhorns, Bevo the steer
+  {id:"mccombs",name:"UT Austin McCombs",abbr:"UTSB",primary:"#BF5700",secondary:"#333F48",accent:"#F8971F",logo:"🤠",mascot:"Bevo the Longhorn"},
+  // SMU Cox — Mustangs, Peruna the pony
+  {id:"cox",name:"SMU Cox",abbr:"SMU",primary:"#CC0035",secondary:"#354CA1",accent:"#F5A623",logo:"🐴",mascot:"Peruna the Mustang"},
+  // TCU Neeley — Horned Frogs, SuperFrog
+  {id:"neeley",name:"TCU Neeley",abbr:"TCU",primary:"#4D1979",secondary:"#A3A9AC",accent:"#C9B765",logo:"🐸",mascot:"SuperFrog"},
+  // Wash U Olin — Bears, Wally the Bear
+  {id:"olin",name:"Wash U Olin",abbr:"OLIN",primary:"#A51417",secondary:"#101820",accent:"#C69214",logo:"🐻",mascot:"Wally the Bear"},
+  // Custom
+  {id:"custom",name:"Other / Custom",abbr:"MY",primary:"#6366f1",secondary:"#0ea5e9",accent:"#f59e0b",logo:"🎓",mascot:""},
 ];
 const DEGREE_LEVELS=[
   {id:"associates",label:"Associate's Degree",icon:"📗"},
@@ -193,7 +208,10 @@ function Onboarding({user,onComplete}){
       {UNIVERSITIES.map(u=>(
         <div key={u.id} onClick={()=>setP(x=>({...x,university:u.id,university_abbr:u.abbr,university_primary:u.primary}))} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:9,border:`2px solid ${p.university===u.id?u.primary:"#2a2a38"}`,background:p.university===u.id?`rgba(${hexToRgb(u.primary)},.12)`:"transparent",cursor:"pointer",transition:"all .2s"}}>
           <div style={{width:26,height:26,borderRadius:6,background:u.primary,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0}}>{u.logo}</div>
-          <span style={{fontSize:13,color:"#e8e3d8",flex:1,fontWeight:p.university===u.id?600:400}}>{u.name}</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:13,color:"#e8e3d8",fontWeight:p.university===u.id?600:400}}>{u.name}</div>
+            {u.mascot&&<div style={{fontSize:10,color:"#7a7590"}}>{u.mascot}</div>}
+          </div>
           <div style={{display:"flex",gap:3}}>{[u.primary,u.secondary,u.accent].map((c,i)=><div key={i} style={{width:10,height:10,borderRadius:2,background:c}}/>)}</div>
         </div>
       ))}
@@ -1072,6 +1090,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
             {sidebarOpen&&<div style={{overflow:"hidden",marginRight:5}}>
               <div style={{fontSize:9,letterSpacing:3,color:T.accent,textTransform:"uppercase",fontWeight:700,whiteSpace:"nowrap"}}>{uni.abbr} · {profile.full_name?.split(" ")[0]}</div>
               <div style={{fontSize:17,fontWeight:700,color:T.text,whiteSpace:"nowrap"}}>{uni.logo} ProPlanner</div>
+              {uni.mascot&&<div style={{fontSize:9,color:T.faint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{uni.mascot}</div>}
             </div>}
             <button onClick={()=>setSidebar(o=>!o)} style={{background:"transparent",border:`1px solid ${T.border2}`,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",color:T.muted,fontSize:11,flexShrink:0}}>{sidebarOpen?"←":"→"}</button>
           </div>
@@ -1132,7 +1151,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
               <div style={{marginBottom:16,paddingBottom:14,borderBottom:`2px solid rgba(${rgb},.18)`}}>
                 <div style={{fontSize:10,letterSpacing:3,color:T.accent,textTransform:"uppercase"}}>Welcome back, {profile.full_name?.split(" ")[0]}</div>
                 <h1 style={{fontSize:25,fontWeight:700,marginTop:3}}>Your Academic Dashboard</h1>
-                <div style={{color:T.muted,fontSize:12,marginTop:3}}>{MONTHS[t.month]} {t.day}, {t.year} · {uni.name} · {DEGREE_LEVELS.find(d=>d.id===profile.degree_level)?.label}</div>
+                <div style={{color:T.muted,fontSize:12,marginTop:3}}>{MONTHS[t.month]} {t.day}, {t.year} · {uni.name}{uni.mascot?" · "+uni.mascot:""} · {DEGREE_LEVELS.find(d=>d.id===profile.degree_level)?.label}</div>
                 <div style={{display:"flex",gap:7,marginTop:7,flexWrap:"wrap"}}>
                   {profile.is_athlete&&profile.sports?.map(s=><span key={s} style={{fontSize:10,padding:"2px 8px",borderRadius:12,background:`rgba(${rgb},.1)`,color:T.accent,border:`1px solid rgba(${rgb},.25)`}}>🏅 {s}</span>)}
                   {profile.is_greek&&<span style={{fontSize:10,padding:"2px 8px",borderRadius:12,background:`rgba(${rgb},.1)`,color:T.accent,border:`1px solid rgba(${rgb},.25)`}}>🏛 {profile.greek_org}</span>}
