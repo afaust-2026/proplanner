@@ -406,7 +406,12 @@ export default function ProPlanScholar(){
   const[profile,setProfile]=useState(null);
 
   // UI state
-  const[view,setView]=useState("dashboard");
+  const[view,setView]=useState(()=>{
+    // Read initial view from URL hash so deep links work
+    const hash=window.location.hash.replace("#","");
+    const validViews=["dashboard","calendar","assignments","courses","schedule","dissertation","flashcards","settings"];
+    return validViews.includes(hash)?hash:"dashboard";
+  });
   const[dark,setDark]=useState(()=>window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);
   const[sidebarOpen,setSidebar]=useState(true);
   const[isMobile,setIsMobile]=useState(()=>typeof window!=="undefined"&&window.innerWidth<=768);
@@ -508,6 +513,27 @@ export default function ProPlanScholar(){
 
   useEffect(()=>{if(authUser)loadProfile();},[authUser]);
   useEffect(()=>{if(profile?.onboarding_complete)loadAllData();},[profile?.id]);
+  // Sync view to browser history so back/forward buttons work
+  useEffect(()=>{
+    if(!authUser||!profile?.onboarding_complete)return;
+    const current=window.location.hash.replace("#","");
+    if(current!==view){
+      window.history.pushState({view},"",'#'+view);
+    }
+  },[view,authUser,profile?.onboarding_complete]);
+
+  // Handle browser back/forward button
+  useEffect(()=>{
+    function onPopState(e){
+      const hash=window.location.hash.replace("#","");
+      const validViews=["dashboard","calendar","assignments","courses","schedule","dissertation","flashcards","settings"];
+      if(validViews.includes(hash))setView(hash);
+      else setView("dashboard");
+    }
+    window.addEventListener("popstate",onPopState);
+    return()=>window.removeEventListener("popstate",onPopState);
+  },[]);
+
   useEffect(()=>{generateStudyBlocks();},[assignments,courses,workSched,travelDates,scheduleBlocks]);
   useEffect(()=>{chatEndRef.current?.scrollIntoView({behavior:"smooth"});},[chatMessages,chatOpen]);
 
@@ -543,45 +569,79 @@ export default function ProPlanScholar(){
   // ── Study scheduler (respects work, sports, greek, travel) ─────────────────
   function getStudyWindow(dateStr){
     const dayName=DAYS_SHORT[new Date(dateStr+"T00:00:00").getDay()];
-    // Blocked by travel
-    if(travelDates.some(tr=>dateStr>=tr.start&&dateStr<=tr.end))return{available:false,slot:"Traveling"};
-    const dayBlocks=scheduleBlocks.filter(b=>b.day_of_week===dayName||b.date_specific===dateStr);
+
+    // 1. Travel days — completely blocked
+    if(travelDates.some(tr=>dateStr>=tr.start&&dateStr<=tr.end)){
+      return{available:false,slot:"Traveling"};
+    }
+
+    // 2. Build a list of ALL committed time blocks for this day
+    // including work schedule AND all activity blocks (sports, greek, work events)
+    const committed=[]; // [{start:H, end:H, label}]
+
     const ws=workSched[dayName];
-    // Calculate free hours in the day
-    // Day = 7am to 10pm = 15 usable hours
-    let blockedHours=0;
-    if(ws?.work){
-      const startH=parseInt(ws.start?.split(":")[0]||8);
-      const endH=parseInt(ws.end?.split(":")[0]||18);
-      blockedHours+=Math.max(0,endH-startH);
+    if(ws?.work&&ws.start&&ws.end){
+      const wStart=parseInt(ws.start.split(":")[0]);
+      const wEnd=parseInt(ws.end.split(":")[0]);
+      if(wEnd>wStart) committed.push({start:wStart,end:wEnd,label:"Work"});
     }
+
+    // Activity blocks for this day (recurring by day name OR specific date)
+    const dayBlocks=scheduleBlocks.filter(b=>
+      b.day_of_week===dayName||b.date_specific===dateStr
+    );
     dayBlocks.forEach(b=>{
-      const bStart=parseInt(b.start_time?.split(":")[0]||15);
-      const bEnd=parseInt(b.end_time?.split(":")[0]||17);
-      blockedHours+=Math.max(0,bEnd-bStart);
+      const bStart=parseInt((b.start_time||"15:00").split(":")[0]);
+      const bEnd=parseInt((b.end_time||"17:00").split(":")[0]);
+      if(bEnd>bStart) committed.push({start:bStart,end:bEnd,label:b.label||b.block_type});
     });
-    // Need at least 2 free hours to study
-    if(blockedHours>=13)return{available:false,slot:"Day fully booked"};
-    // Determine best study slot
-    if(!ws?.work&&dayBlocks.length===0)return{available:true,slot:"All day — pick your best time"};
-    if(ws?.work){
-      const workEnd=parseInt(ws.end?.split(":")[0]||18);
-      // Check if morning before work is free (before 8am start = unlikely, so evening default)
-      const workStart=parseInt(ws.start?.split(":")[0]||8);
-      if(workStart>=9){
-        return{available:true,slot:`Morning before work or Evening after ${workEnd}:00`};
-      }
-      return{available:true,slot:`Evening after ${workEnd}:00`};
+
+    // 3. Calculate total blocked hours
+    const totalBlocked=committed.reduce((sum,c)=>sum+Math.max(0,c.end-c.start),0);
+
+    // If 13+ hours blocked out of 15 usable (7am-10pm), skip this day
+    if(totalBlocked>=13) return{available:false,slot:"Day fully booked"};
+
+    // 4. Nothing committed — whole day free
+    if(committed.length===0) return{available:true,slot:"All day — pick your best time"};
+
+    // 5. Find the best study window by looking at gaps
+    // Sort all committed blocks by start time
+    const sorted=[...committed].sort((a,b)=>a.start-b.start);
+
+    // Find the latest end time across ALL commitments
+    const latestEnd=sorted.reduce((max,c)=>Math.max(max,c.end),0);
+    // Find the earliest start time across ALL commitments
+    const earliestStart=sorted.reduce((min,c)=>Math.min(min,c.start),24);
+
+    // Check morning window: is there 2+ hours free before the first commitment?
+    // Morning = 7am to first commitment start
+    const morningFree=earliestStart-7;
+    // Evening window: after the last commitment ends (up to 10pm = hour 22)
+    const eveningFree=22-latestEnd;
+
+    // Prefer evening (most common for students), but offer morning if it's substantial
+    if(morningFree>=2&&eveningFree>=2){
+      return{available:true,slot:`Morning before ${earliestStart}:00 or Evening after ${latestEnd}:00`};
     }
-    // Activity blocks only — study around them
-    const latestBlock=dayBlocks.reduce((max,b)=>{
-      const h=parseInt(b.end_time?.split(":")[0]||17);return h>max?h:max;
-    },0);
-    const earliestBlock=dayBlocks.reduce((min,b)=>{
-      const h=parseInt(b.start_time?.split(":")[0]||15);return h<min?h:min;
-    },24);
-    if(earliestBlock>=12)return{available:true,slot:`Morning (before ${earliestBlock}:00)`};
-    return{available:true,slot:`After ${latestBlock}:00`};
+    if(morningFree>=2){
+      return{available:true,slot:`Morning before ${earliestStart}:00`};
+    }
+    if(eveningFree>=2){
+      return{available:true,slot:`Evening after ${latestEnd}:00`};
+    }
+
+    // Check midday gaps (between commitments)
+    for(let i=0;i<sorted.length-1;i++){
+      const gapStart=sorted[i].end;
+      const gapEnd=sorted[i+1].start;
+      if(gapEnd-gapStart>=2){
+        return{available:true,slot:`Midday ${gapStart}:00–${gapEnd}:00`};
+      }
+    }
+
+    // Less than 2 hours free anywhere — skip this day
+    return{available:false,slot:"Day fully booked"};
   }
 
   function generateStudyBlocks(){
@@ -607,12 +667,22 @@ export default function ProPlanScholar(){
         const alreadyOnDay=dailyCount[dateStr]||0;
         // Place a block if: day is available, this assignment not already on this day, max 2 sessions per day
         if(win.available&&!blocks.find(b=>b.date===dateStr&&b.assignId===assign.id)&&alreadyOnDay<2){
-          // Assign a real start time based on the window
+          // Assign a real start time based on the window description
           let studyStart="18:00";
-          if(win.slot.includes("Morning"))studyStart="08:00";
-          else if(win.slot.includes("All day"))studyStart="09:00";
-          else if(win.slot.includes("After ")){const h=win.slot.match(/After (\d+)/);if(h)studyStart=`${String(parseInt(h[1])+1).padStart(2,"0")}:00`;}
-          else if(win.slot.includes("Evening after ")){const h=win.slot.match(/after (\d+)/i);if(h)studyStart=`${String(parseInt(h[1])+1).padStart(2,"0")}:00`;}
+          if(win.slot.includes("All day"))studyStart="09:00";
+          else if(win.slot.startsWith("Morning before")){
+            // Morning before X:00 — start at 7am
+            studyStart="07:00";
+          }else if(win.slot.startsWith("Midday")){
+            // Midday H:00–H:00 — start at the midday window start
+            const h=win.slot.match(/Midday (\d+):/);if(h)studyStart=`${String(parseInt(h[1])).padStart(2,"0")}:00`;
+          }else if(win.slot.includes("Evening after")||win.slot.includes("after")){
+            // Evening after H:00 — start 30min after the last commitment
+            const h=win.slot.match(/after (\d+)/i);
+            if(h)studyStart=`${String(parseInt(h[1])+1).padStart(2,"0")}:00`;
+          }else if(win.slot.includes("Morning")){
+            studyStart="08:00";
+          }
           const studyEndH=parseInt(studyStart.split(":")[0])+2;
           const studyEnd=`${String(studyEndH).padStart(2,"0")}:00`;
           blocks.push({
