@@ -23,36 +23,36 @@ function hexToRgb(hex){try{const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.sl
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const UNIVERSITIES=[
-  // UTD — Comets, mascot Temoc (comet spelled backwards). Comet emoji ☄️
-  {id:"utd",name:"UT Dallas",abbr:"UTD",primary:"#C75B12",secondary:"#154734",accent:"#F5A623",logo:"☄️",mascot:"Temoc the Comet"},
-  // Harvard — The Crimson, John Harvard. No official mascot; use classic book/crimson
-  {id:"harvard",name:"Harvard University",abbr:"HBS",primary:"#A51C30",secondary:"#1E1E1E",accent:"#C0A060",logo:"📕",mascot:"The Crimson"},
-  // Wharton/UPenn — The Quakers, Ben Franklin
-  {id:"wharton",name:"Wharton / UPenn",abbr:"PENN",primary:"#011F5B",secondary:"#990000",accent:"#C0A060",logo:"🎩",mascot:"The Quakers"},
-  // MIT — Engineers, Tim the Beaver
-  {id:"mit",name:"MIT Sloan",abbr:"MIT",primary:"#750014",secondary:"#8A8B8C",accent:"#A31F34",logo:"🦫",mascot:"Tim the Beaver"},
-  // Stanford — Cardinal (color, not bird), The Tree (unofficial but famous)
-  {id:"stanford",name:"Stanford GSB",abbr:"GSB",primary:"#8C1515",secondary:"#4D4F53",accent:"#B6B1A9",logo:"🌲",mascot:"The Cardinal"},
-  // U Chicago — Maroons, the Phoenix
-  {id:"chicago",name:"U Chicago Booth",abbr:"BOOTH",primary:"#800000",secondary:"#767676",accent:"#FFA500",logo:"🦅",mascot:"The Maroons"},
-  // Northwestern Kellogg — Wildcats, Willie the Wildcat
-  {id:"kellogg",name:"Northwestern Kellogg",abbr:"KSM",primary:"#4E2A84",secondary:"#716C6B",accent:"#B6ACD1",logo:"🐱",mascot:"Willie the Wildcat"},
-  // Michigan Ross — Wolverines
-  {id:"ross",name:"U Michigan Ross",abbr:"ROSS",primary:"#00274C",secondary:"#FFCB05",accent:"#FFCB05",logo:"🦡",mascot:"Biff the Wolverine"},
-  // Duke Fuqua — Blue Devils
-  {id:"fuqua",name:"Duke Fuqua",abbr:"FUQUA",primary:"#012169",secondary:"#C84E00",accent:"#E89923",logo:"😈",mascot:"Blue Devil"},
-  // Dartmouth Tuck — Big Green, Keggy (unofficial). Use pine tree (Big Green)
-  {id:"tuck",name:"Dartmouth Tuck",abbr:"TUCK",primary:"#00693E",secondary:"#12312B",accent:"#64A70B",logo:"🌲",mascot:"Big Green"},
-  // UT Austin McCombs — Longhorns, Bevo the steer
-  {id:"mccombs",name:"UT Austin McCombs",abbr:"UTSB",primary:"#BF5700",secondary:"#333F48",accent:"#F8971F",logo:"🤠",mascot:"Bevo the Longhorn"},
-  // SMU Cox — Mustangs, Peruna the pony
-  {id:"cox",name:"SMU Cox",abbr:"SMU",primary:"#CC0035",secondary:"#354CA1",accent:"#F5A623",logo:"🐴",mascot:"Peruna the Mustang"},
-  // TCU Neeley — Horned Frogs, SuperFrog
-  {id:"neeley",name:"TCU Neeley",abbr:"TCU",primary:"#4D1979",secondary:"#A3A9AC",accent:"#C9B765",logo:"🐸",mascot:"SuperFrog"},
-  // Wash U Olin — Bears, Wally the Bear
-  {id:"olin",name:"Wash U Olin",abbr:"OLIN",primary:"#A51417",secondary:"#101820",accent:"#C69214",logo:"🐻",mascot:"Wally the Bear"},
-  // Custom
-  {id:"custom",name:"Other / Custom",abbr:"MY",primary:"#6366f1",secondary:"#0ea5e9",accent:"#f59e0b",logo:"🎓",mascot:""},
+  // ── Dallas / DFW ─────────────────────────────────────────────────────────
+  {id:"utd",    name:"UT Dallas",             abbr:"UTD",  primary:"#C75B12",secondary:"#154734",accent:"#F5A623",logo:"☄️", mascot:"Temoc the Comet"},
+  {id:"smu",    name:"SMU",                   abbr:"SMU",  primary:"#CC0035",secondary:"#354CA1",accent:"#F5A623",logo:"🐴", mascot:"Peruna the Mustang"},
+  {id:"tcu",    name:"TCU",                   abbr:"TCU",  primary:"#4D1979",secondary:"#A3A9AC",accent:"#C9B765",logo:"🐸", mascot:"SuperFrog"},
+  {id:"uta",    name:"UT Arlington",          abbr:"UTA",  primary:"#003087",secondary:"#FF8200",accent:"#FF8200",logo:"🦅", mascot:"Blaze the Maverick"},
+  {id:"unt",    name:"UNT",                   abbr:"UNT",  primary:"#00853E",secondary:"#FFFFFF",accent:"#00853E",logo:"🦅", mascot:"Scrappy the Eagle"},
+  {id:"dbu",    name:"Dallas Baptist Univ.",  abbr:"DBU",  primary:"#00205B",secondary:"#C8102E",accent:"#C8102E",logo:"🦁", mascot:"Patriot Lion"},
+  // ── Austin ───────────────────────────────────────────────────────────────
+  {id:"utaustin",name:"UT Austin",            abbr:"UT",   primary:"#BF5700",secondary:"#333F48",accent:"#F8971F",logo:"🤠", mascot:"Bevo the Longhorn"},
+  {id:"txstate", name:"Texas State",          abbr:"TXST", primary:"#501214",secondary:"#8B8B00",accent:"#8B8B00",logo:"🐱", mascot:"Boko the Bobcat"},
+  {id:"stedwards",name:"St. Edward's Univ.", abbr:"SEU",  primary:"#FFD100",secondary:"#002147",accent:"#002147",logo:"🌟", mascot:"Hilltoppers"},
+  // ── Houston ──────────────────────────────────────────────────────────────
+  {id:"uh",     name:"Univ. of Houston",      abbr:"UH",   primary:"#CC0000",secondary:"#666666",accent:"#CC0000",logo:"🐾", mascot:"Shasta the Cougar"},
+  {id:"rice",   name:"Rice University",       abbr:"RICE", primary:"#00205B",secondary:"#7A99AC",accent:"#7A99AC",logo:"🦉", mascot:"Sammy the Owl"},
+  {id:"tsu",    name:"Texas Southern Univ.",  abbr:"TSU",  primary:"#4B0082",secondary:"#C0965C",accent:"#C0965C",logo:"🐯", mascot:"Tom the Tiger"},
+  {id:"uhd",    name:"UH-Downtown",           abbr:"UHD",  primary:"#CC0000",secondary:"#808080",accent:"#808080",logo:"🐾", mascot:"Gator"},
+  // ── San Antonio ──────────────────────────────────────────────────────────
+  {id:"utsa",   name:"UTSA",                  abbr:"UTSA", primary:"#F15A22",secondary:"#002A5C",accent:"#002A5C",logo:"🐦", mascot:"Rowdy the Roadrunner"},
+  {id:"trinity",name:"Trinity University",    abbr:"TRU",  primary:"#840029",secondary:"#4E2B16",accent:"#4E2B16",logo:"🐯", mascot:"Triton the Tiger"},
+  // ── Waco / Central TX ────────────────────────────────────────────────────
+  {id:"baylor", name:"Baylor University",     abbr:"BU",   primary:"#003015",secondary:"#FFB81C",accent:"#FFB81C",logo:"🐻", mascot:"Joy & Judah the Bears"},
+  {id:"umhb",   name:"Mary Hardin-Baylor",    abbr:"UMHB", primary:"#461D7C",secondary:"#FFB81C",accent:"#FFB81C",logo:"⚔️", mascot:"Crusaders"},
+  // ── Lubbock / West TX ────────────────────────────────────────────────────
+  {id:"ttu",    name:"Texas Tech",            abbr:"TTU",  primary:"#CC0000",secondary:"#000000",accent:"#CC0000",logo:"🤠", mascot:"Raider Red"},
+  // ── College Station ──────────────────────────────────────────────────────
+  {id:"tamu",   name:"Texas A&M",             abbr:"TAMU", primary:"#500000",secondary:"#FFFFFF",accent:"#500000",logo:"🐕", mascot:"Reveille the Collie"},
+  // ── El Paso / South TX ───────────────────────────────────────────────────
+  {id:"utep",   name:"UTEP",                  abbr:"UTEP", primary:"#FF8200",secondary:"#041E42",accent:"#041E42",logo:"⛏️", mascot:"Paydirt Pete the Miner"},
+  // ── Custom ───────────────────────────────────────────────────────────────
+  {id:"custom", name:"Other / Custom",        abbr:"MY",   primary:"#6366f1",secondary:"#0ea5e9",accent:"#f59e0b",logo:"🎓", mascot:""},
 ];
 const DEGREE_LEVELS=[
   {id:"associates",label:"Associate's Degree",icon:"📗"},
