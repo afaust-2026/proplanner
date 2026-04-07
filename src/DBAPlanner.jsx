@@ -659,58 +659,67 @@ export default function ProPlanScholar(){
 
   function generateStudyBlocks(){
     const blocks=[];
-    // Track how many study sessions are placed per date (max 2 per day across all assignments)
+    // dailyCount tracks number of sessions placed per day (max 2)
     const dailyCount={};
+    // dailyNextStart tracks the next available start hour per day
+    // so sessions don't overlap — each one starts where the last ended
+    const dailyNextStart={};
+
     const pendingAssignments=assignments.filter(a=>!a.done&&daysUntil(a.due)>=0).sort((a,b)=>new Date(a.due)-new Date(b.due));
+
     pendingAssignments.forEach(assign=>{
       const course=courses.find(c=>c.id===assign.courseId);
       const profStats=course?.professor?getProfStats(course.professor,uni.name):null;
       const diff=profStats?Math.round((course.difficulty+profStats.difficulty)/2):course?.rmpData?Math.round((course.difficulty+rmpToInternal(course.rmpData.avgDifficulty))/2):course?.difficulty||3;
-      // Calculate sessions needed: estHours adjusted by difficulty, in 2-hr sessions
       const adjustedHours=assign.estHours*(diff/3);
       const sessions=Math.ceil(adjustedHours/2);
       let placed=0;
-      let checkDay=new Date();
-      checkDay.setHours(0,0,0,0);
+      let checkDay=new Date();checkDay.setHours(0,0,0,0);
       const dueDay=new Date(assign.due+"T00:00:00");
-      // Try to spread sessions evenly — start from today and work forward
+
       while(placed<sessions&&checkDay<dueDay){
         const dateStr=checkDay.toISOString().slice(0,10);
         const win=getStudyWindow(dateStr);
         const alreadyOnDay=dailyCount[dateStr]||0;
-        // Place a block if: day is available, this assignment not already on this day, max 2 sessions per day
+
         if(win.available&&!blocks.find(b=>b.date===dateStr&&b.assignId===assign.id)&&alreadyOnDay<2){
-          // Assign a real start time based on the window description
-          let studyStart="18:00";
-          if(win.slot.includes("All day"))studyStart="09:00";
+          // Get the base start hour from the window
+          let baseStartH=18; // default evening
+          if(win.slot.includes("All day"))baseStartH=9;
           else if(win.slot.startsWith("Morning before")){
-            // Morning before X:00 — start at 7am
-            studyStart="07:00";
+            const h=win.slot.match(/before (\d+)/);baseStartH=h?parseInt(h[1])-2:7;
           }else if(win.slot.startsWith("Midday")){
-            // Midday H:00–H:00 — start at the midday window start
-            const h=win.slot.match(/Midday (\d+):/);if(h)studyStart=`${String(parseInt(h[1])).padStart(2,"0")}:00`;
-          }else if(win.slot.includes("Evening after")||win.slot.includes("after")){
-            // Evening after H:00 — start 30min after the last commitment
-            const h=win.slot.match(/after (\d+)/i);
-            if(h)studyStart=`${String(parseInt(h[1])+1).padStart(2,"0")}:00`;
-          }else if(win.slot.includes("Morning")){
-            studyStart="08:00";
-          }
-          const studyEndH=parseInt(studyStart.split(":")[0])+2;
-          const studyEnd=`${String(studyEndH).padStart(2,"0")}:00`;
+            const h=win.slot.match(/Midday (\d+):/);if(h)baseStartH=parseInt(h[1]);
+          }else if(win.slot.includes("after")||win.slot.includes("After")){
+            const h=win.slot.match(/after (\d+)/i);if(h)baseStartH=parseInt(h[1])+1;
+          }else if(win.slot.includes("Morning")){baseStartH=8;}
+
+          // Use the next available start for this day (no overlaps)
+          // If this is the first session of the day, use the base; otherwise chain from last end
+          const startH=Math.max(baseStartH,dailyNextStart[dateStr]||baseStartH);
+          const endH=startH+2;
+
+          // Don't schedule past 22:00 (10 PM)
+          if(endH>22){checkDay.setDate(checkDay.getDate()+1);continue;}
+
+          const studyStart=`${String(startH).padStart(2,"0")}:00`;
+          const studyEnd=`${String(endH).padStart(2,"0")}:00`;
+
           blocks.push({
             id:`${assign.id}-${dateStr}`,
             assignId:assign.id,
             courseId:assign.courseId,
-            title:`Study: ${assign.title}`,
+            title:assign.title, // just the assignment title, not "Study: ..."
             date:dateStr,
             slot:win.slot,
             startTime:studyStart,
             endTime:studyEnd,
             hours:2,
-            color:course?.color||T.accent,
+            color:course?.color||"#6366f1",
             completed:false,
           });
+          // Advance the next available slot for this day
+          dailyNextStart[dateStr]=endH;
           dailyCount[dateStr]=(dailyCount[dateStr]||0)+1;
           placed++;
         }
@@ -1119,7 +1128,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
   function getEventsForDay(y,m,d){
     const k=dateKey(y,m,d);const dayName=DAYS_SHORT[new Date(y,m,d).getDay()];
     // Find courses that meet on this day
-    const classTimes=courses.filter(c=>(c.class_days||[]).includes(dayName)&&c.class_time);
+    const classTimes=courses.filter(c=>(c.class_days||[]).includes(dayName)&&c.class_days?.length>0);
     return{
       asgn:assignments.filter(a=>a.due===k),
       study:studyBlocks.filter(b=>b.date===k),
@@ -1507,8 +1516,9 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                   {todayStudy.length===0&&<div style={{color:T.faint,fontSize:12,marginBottom:8}}>No study sessions today.</div>}
                   {todayStudy.slice(0,3).map(b=>(
                     <div key={b.id} style={{display:"flex",alignItems:"center",gap:7,padding:"5px 0",borderBottom:`1px solid ${T.border}`}}>
-                      <div style={{width:24,height:24,borderRadius:6,background:b.color+"33",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12}}>📚</div>
-                      <div><div style={{fontSize:12,fontWeight:600}}>{b.title}</div><div style={{fontSize:10,color:T.muted}}>{b.slot}</div></div>
+                      <div style={{width:24,height:24,borderRadius:6,background:b.color+"33",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0}}>📚</div>
+                      <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600}}>{b.title}</div><div style={{fontSize:10,color:T.muted}}>{to12h(b.startTime)} – {to12h(b.endTime)}</div></div>
+                      {completedStudy[b.id]&&<span style={{fontSize:10,color:"#22c55e",fontWeight:700,flexShrink:0}}>✓ Done</span>}
                     </div>
                   ))}
                   <div style={{marginTop:9,padding:9,background:T.subcard,borderRadius:8,border:`1px solid ${T.border2}`}}>
@@ -1583,9 +1593,9 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                   return(
                     <div key={i} onClick={()=>setSelectedDay(isSel?null:day)} style={{minHeight:60,padding:4,borderRadius:7,cursor:"pointer",background:travel?(dark?"#1a1510":"#fff8ee"):isSel?(dark?"#1e1e35":"#ebebff"):isToday?(dark?"#16162a":"#f0f0ff"):(dark?"#12121a":T.card),border:`1px solid ${isToday?T.accent:T.border}`,transition:"all .15s"}}>
                       <div style={{fontSize:11,fontWeight:isToday?700:400,color:isToday?T.accent:T.text,marginBottom:2}}>{day}{travel&&" ✈"}</div>
-                      {classes.map(c=><div key={c.id} style={{fontSize:8,padding:"1px 4px",borderRadius:3,background:"rgba(16,185,129,.2)",color:"#10b981",marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600}}>🎓 {c.name.length>9?c.name.slice(0,9)+"…":c.name} {to12h(c.class_time)}</div>)}
+                      {classes.map(c=><div key={c.id} style={{fontSize:8,padding:"1px 4px",borderRadius:3,background:"rgba(16,185,129,.2)",color:"#10b981",marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600}}>🎓 {c.name.length>10?c.name.slice(0,10)+"…":c.name}{c.class_time&&" "+to12h(c.class_time)}</div>)}
                       {asgn.map(a=>{const col=courses.find(c=>c.id===a.courseId)?.color||T.accent;return(<div key={a.id} style={{fontSize:8,padding:"1px 4px",borderRadius:3,background:`rgba(${hexToRgb(col)},.2)`,color:col,marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>📌 {a.title.length>10?a.title.slice(0,10)+"…":a.title}</div>);})}
-                      {study.slice(0,2).map(b=>{const done=completedStudy[b.id];return(<div key={b.id} style={{fontSize:8,padding:"1px 4px",borderRadius:3,background:done?"rgba(34,197,94,.15)":"rgba(14,165,233,.15)",color:done?"#22c55e":"#38bdf8",marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textDecoration:done?"line-through":"none"}}>📚 {to12h(b.startTime)}</div>);})}
+                      {study.slice(0,2).map(b=>{const done=completedStudy[b.id];const bCourse=courses.find(c=>c.id===b.courseId);return(<div key={b.id} style={{fontSize:8,padding:"1px 4px",borderRadius:3,background:done?`rgba(${hexToRgb(bCourse?.color||"34,197,94")},.15)`:`rgba(${hexToRgb(bCourse?.color||"14,165,233")},.2)`,color:done?"#22c55e":bCourse?.color||"#38bdf8",marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textDecoration:done?"line-through":"none",fontWeight:500}}>📚 {to12h(b.startTime)} {b.title.length>10?b.title.slice(0,10)+"…":b.title}</div>);})}
                       {milestone&&<div style={{fontSize:8,padding:"1px 4px",borderRadius:3,background:"rgba(167,139,250,.2)",color:"#a78bfa",marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>⬟ {milestone.title.length>10?milestone.title.slice(0,10)+"…":milestone.title}</div>}
                       {study.length>2&&<div style={{fontSize:7,color:T.faint}}>+{study.length-2} more</div>}
                     </div>
