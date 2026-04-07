@@ -19,6 +19,13 @@ function today(){const d=new Date();return{year:d.getFullYear(),month:d.getMonth
 function daysUntil(due){const n=new Date();n.setHours(0,0,0,0);return Math.ceil((new Date(due+"T00:00:00")-n)/86400000);}
 function urgencyColor(d,T){return d<0?T.danger:d<=3?T.warning:d<=7?T.caution:T.success;}
 function rmpToInternal(r){return Math.round(Math.min(5,Math.max(1,r||3)));}
+function to12h(t){
+  if(!t)return"";
+  const[h,m]=t.split(":").map(Number);
+  const ampm=h>=12?"PM":"AM";
+  const h12=h%12||12;
+  return m===0?`${h12} ${ampm}`:`${h12}:${String(m).padStart(2,"0")} ${ampm}`;
+}
 function hexToRgb(hex){try{const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return`${r},${g},${b}`;}catch{return"99,102,241";}}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -415,11 +422,17 @@ export default function ProPlanScholar(){
   const[dark,setDark]=useState(()=>window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);
   const[sidebarOpen,setSidebar]=useState(true);
   const[isMobile,setIsMobile]=useState(()=>typeof window!=="undefined"&&window.innerWidth<=768);
+  const[installPrompt,setInstallPrompt]=useState(null); // PWA install prompt
+  const[showInstallBanner,setShowInstallBanner]=useState(false);
+
   useEffect(()=>{
     function handleResize(){const mobile=window.innerWidth<=768;setIsMobile(mobile);if(mobile)setSidebar(false);}
     handleResize();
     window.addEventListener("resize",handleResize);
-    return()=>window.removeEventListener("resize",handleResize);
+    // Listen for PWA install prompt (Android Chrome)
+    function handleInstall(e){e.preventDefault();setInstallPrompt(e);setShowInstallBanner(true);}
+    window.addEventListener("beforeinstallprompt",handleInstall);
+    return()=>{window.removeEventListener("resize",handleResize);window.removeEventListener("beforeinstallprompt",handleInstall);};
   },[]);
   const[chatOpen,setChatOpen]=useState(false);
 
@@ -1173,11 +1186,11 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
     return{
       studyDone,studySched,classHrsWk,workHrsWk,sportsHrsWk,greekHrsWk,otherHrsWk,totalWk,freeHrs,overloaded,strained,
       breakdown:[
-        {label:"Classes",hrs:classHrsWk,color:"#10b981",icon:"🎓",detail:courses.filter(c=>c.class_days?.length>0).map(c=>`${c.name}: ${c.class_days?.join(",")} ${c.class_time||""}`)},
+        {label:"Classes",hrs:classHrsWk,color:"#10b981",icon:"🎓",detail:courses.filter(c=>c.class_days?.length>0).map(c=>`${c.name}: ${c.class_days?.join(",")} ${to12h(c.class_time)||""}`)},
         {label:"Studying",hrs:studySched,color:"#0ea5e9",icon:"📚",detail:assignments.filter(a=>!a.done).slice(0,5).map(a=>`${a.title}: ${studyBlocks.filter(b=>b.assignId===a.id).length*2}h planned`)},
-        {label:"Work",hrs:workHrsWk,color:"#f59e0b",icon:"💼",detail:Object.entries(workSched).filter(([,v])=>v.work).map(([day,v])=>`${day}: ${v.start}–${v.end}`)},
-        {label:"Sports",hrs:sportsHrsWk,color:"#ef4444",icon:"🏅",detail:scheduleBlocks.filter(b=>b.block_type==="sport").map(b=>`${b.label}: ${b.day_of_week} ${b.start_time}–${b.end_time}`)},
-        {label:"Greek Life",hrs:greekHrsWk,color:"#8b5cf6",icon:"🏛",detail:scheduleBlocks.filter(b=>b.block_type==="greek").map(b=>`${b.label}: ${b.day_of_week} ${b.start_time}–${b.end_time}`)},
+        {label:"Work",hrs:workHrsWk,color:"#f59e0b",icon:"💼",detail:Object.entries(workSched).filter(([,v])=>v.work).map(([day,v])=>`${day}: ${to12h(v.start)}–${to12h(v.end)}`)},
+        {label:"Sports",hrs:sportsHrsWk,color:"#ef4444",icon:"🏅",detail:scheduleBlocks.filter(b=>b.block_type==="sport").map(b=>`${b.label}: ${b.day_of_week} ${to12h(b.start_time)}–${to12h(b.end_time)}`)},
+        {label:"Greek Life",hrs:greekHrsWk,color:"#8b5cf6",icon:"🏛",detail:scheduleBlocks.filter(b=>b.block_type==="greek").map(b=>`${b.label}: ${b.day_of_week} ${to12h(b.start_time)}–${to12h(b.end_time)}`)},
         {label:"Other",hrs:otherHrsWk,color:"#6366f1",icon:"📌",detail:scheduleBlocks.filter(b=>b.block_type==="other").map(b=>`${b.label}: ${b.day_of_week}`)},
         {label:"Free Time",hrs:freeHrs,color:"#22c55e",icon:"😊",detail:["Time for rest, hobbies, and personal wellness"]},
       ].filter(x=>x.hrs>0),
@@ -1226,7 +1239,18 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
     .prog-fill{height:100%;border-radius:4px;transition:width .4s;}
     .del-btn{background:transparent;border:1px solid ${T.border2};border-radius:6px;padding:3px 8px;font-size:11px;color:${T.danger};cursor:pointer;transition:all .2s;}.del-btn:hover{background:rgba(239,68,68,.08);border-color:${T.danger};}
     @media(max-width:768px){
-      .main-content{padding:14px 16px!important;}
+      .main-content{padding:14px 16px 80px!important;} /* bottom padding for iOS home bar */
+      .nb{min-height:44px;} /* Apple HIG minimum touch target */
+      .bp,.bg2,.del-btn{min-height:38px;}
+      input,select,textarea{font-size:16px!important;} /* prevents iOS zoom on focus */
+    }
+    /* iOS safe area support */
+    @supports(padding:max(0px)){
+      .main-content{
+        padding-left:max(16px,env(safe-area-inset-left))!important;
+        padding-right:max(16px,env(safe-area-inset-right))!important;
+        padding-bottom:max(80px,calc(env(safe-area-inset-bottom)+16px))!important;
+      }
     }
     .stat-card:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(${rgb},.2);cursor:pointer;}
     .stat-card{transition:transform .2s,box-shadow .2s;}
@@ -1325,6 +1349,14 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
         </aside>
 
         {/* ═══ MAIN CONTENT ═══ */}
+        {/* Desktop sidebar reopen tab — only visible when sidebar is collapsed on desktop */}
+        {!sidebarOpen&&!isMobile&&(
+          <div onClick={()=>setSidebar(true)} title="Open sidebar" style={{position:"fixed",left:0,top:"50%",transform:"translateY(-50%)",zIndex:50,background:T.accent,color:"#fff",borderRadius:"0 8px 8px 0",padding:"14px 6px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,boxShadow:"2px 0 12px rgba(0,0,0,.2)",transition:"all .2s"}}>
+            <div style={{width:14,height:2,background:"#fff",borderRadius:2}}/>
+            <div style={{width:14,height:2,background:"#fff",borderRadius:2}}/>
+            <div style={{width:14,height:2,background:"#fff",borderRadius:2}}/>
+          </div>
+        )}
         <main className="main-content" style={{flex:1,overflowY:"auto",padding:"22px 26px",minWidth:0,position:"relative"}}>
           {/* Hamburger — subtle, top of page, mobile only */}
           {isMobile&&!sidebarOpen&&(
@@ -1336,6 +1368,21 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
               </div>
               <span style={{fontSize:12,color:T.muted}}>{uni.logo} Menu</span>
             </button>
+          )}
+
+          {/* PWA Install Banner */}
+          {showInstallBanner&&installPrompt&&(
+            <div style={{marginBottom:14,padding:"12px 14px",background:`rgba(${rgb},.1)`,border:`1px solid rgba(${rgb},.3)`,borderRadius:12,display:"flex",alignItems:"center",gap:10}}>
+              <span style={{fontSize:24,flexShrink:0}}>📲</span>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:600,fontSize:13,marginBottom:2}}>Install ProPlan Scholar</div>
+                <div style={{fontSize:11,color:T.muted}}>Add to your home screen for the full app experience</div>
+              </div>
+              <div style={{display:"flex",gap:6,flexShrink:0}}>
+                <button onClick={()=>setShowInstallBanner(false)} style={{background:"transparent",border:`1px solid ${T.border2}`,borderRadius:7,padding:"5px 8px",fontSize:11,color:T.muted,cursor:"pointer",fontFamily:"inherit"}}>Later</button>
+                <button className="bp" style={{fontSize:11,padding:"5px 12px"}} onClick={async()=>{if(installPrompt){await installPrompt.prompt();setInstallPrompt(null);setShowInstallBanner(false);}}}>Install</button>
+              </div>
+            </div>
           )}
 
           {/* ── DASHBOARD ── */}
@@ -1535,10 +1582,12 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                   const isSel=selectedDay===day;
                   return(
                     <div key={i} onClick={()=>setSelectedDay(isSel?null:day)} style={{minHeight:60,padding:4,borderRadius:7,cursor:"pointer",background:travel?(dark?"#1a1510":"#fff8ee"):isSel?(dark?"#1e1e35":"#ebebff"):isToday?(dark?"#16162a":"#f0f0ff"):(dark?"#12121a":T.card),border:`1px solid ${isToday?T.accent:T.border}`,transition:"all .15s"}}>
-                      <div style={{fontSize:11,fontWeight:isToday?700:400,color:isToday?T.accent:T.text,marginBottom:1}}>{day}{travel&&"✈"}{blocks.length>0&&"⊞"}</div>
-                      {milestone&&<div style={{fontSize:9,padding:"1px 3px",borderRadius:3,background:"rgba(167,139,250,.2)",color:"#a78bfa",marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>⬟{milestone.title}</div>}
-                      {asgn.map(a=><div key={a.id} style={{fontSize:9,padding:"1px 3px",borderRadius:3,background:`rgba(${hexToRgb(courses.find(c=>c.id===a.courseId)?.color||T.accent)},.2)`,color:courses.find(c=>c.id===a.courseId)?.color||T.accent,marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>📌{a.title}</div>)}
-                      {study.slice(0,1).map(b=><div key={b.id} style={{fontSize:9,padding:"1px 3px",borderRadius:3,background:"rgba(14,165,233,.15)",color:"#38bdf8",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>📚{b.title.replace("Study: ","")}</div>)}
+                      <div style={{fontSize:11,fontWeight:isToday?700:400,color:isToday?T.accent:T.text,marginBottom:2}}>{day}{travel&&" ✈"}</div>
+                      {classes.map(c=><div key={c.id} style={{fontSize:8,padding:"1px 4px",borderRadius:3,background:"rgba(16,185,129,.2)",color:"#10b981",marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600}}>🎓 {c.name.length>9?c.name.slice(0,9)+"…":c.name} {to12h(c.class_time)}</div>)}
+                      {asgn.map(a=>{const col=courses.find(c=>c.id===a.courseId)?.color||T.accent;return(<div key={a.id} style={{fontSize:8,padding:"1px 4px",borderRadius:3,background:`rgba(${hexToRgb(col)},.2)`,color:col,marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>📌 {a.title.length>10?a.title.slice(0,10)+"…":a.title}</div>);})}
+                      {study.slice(0,2).map(b=>{const done=completedStudy[b.id];return(<div key={b.id} style={{fontSize:8,padding:"1px 4px",borderRadius:3,background:done?"rgba(34,197,94,.15)":"rgba(14,165,233,.15)",color:done?"#22c55e":"#38bdf8",marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textDecoration:done?"line-through":"none"}}>📚 {to12h(b.startTime)}</div>);})}
+                      {milestone&&<div style={{fontSize:8,padding:"1px 4px",borderRadius:3,background:"rgba(167,139,250,.2)",color:"#a78bfa",marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>⬟ {milestone.title.length>10?milestone.title.slice(0,10)+"…":milestone.title}</div>}
+                      {study.length>2&&<div style={{fontSize:7,color:T.faint}}>+{study.length-2} more</div>}
                     </div>
                   );
                 })}
@@ -1556,11 +1605,11 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                         <span style={{fontSize:12}}>🎓</span>
                         <div style={{flex:1}}>
                           <div style={{fontWeight:600,fontSize:12,color:c.color}}>{c.name}</div>
-                          <div style={{fontSize:10,color:T.muted}}>{c.class_time}{c.class_end_time?" – "+c.class_end_time:""}</div>
+                          <div style={{fontSize:10,color:T.muted}}>{to12h(c.class_time)}{c.class_end_time?" – "+to12h(c.class_end_time):""}</div>
                         </div>
                       </div>
                     ))}
-                    {blocks.map(b=><div key={b.id} style={{fontSize:11,color:T.muted,marginBottom:3}}>⊞ {b.label} ({b.start_time}–{b.end_time})</div>)}
+                    {blocks.map(b=><div key={b.id} style={{fontSize:11,color:T.muted,marginBottom:3}}>⊞ {b.label} ({to12h(b.start_time)}–{to12h(b.end_time)})</div>)}
                     {asgn.length===0&&study.length===0&&!travel&&!milestone&&blocks.length===0&&<div style={{color:T.faint}}>Nothing scheduled.</div>}
                     {asgn.map(a=>{const c=courses.find(x=>x.id===a.courseId);return(<div key={a.id} style={{display:"flex",gap:8,padding:"5px 0",borderBottom:`1px solid ${T.border}`,alignItems:"center"}}><span style={{color:c?.color,fontSize:12}}>📌</span><div style={{flex:1}}><div style={{fontWeight:600,fontSize:12}}>{a.title}</div><div style={{fontSize:10,color:T.muted}}>{c?.name}</div></div></div>);})}
                     {study.map(b=>{const done=completedStudy[b.id];const course=courses.find(c=>c.id===b.courseId);return(
@@ -1568,7 +1617,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                         <span style={{fontSize:12}}>📚</span>
                         <div style={{flex:1}}>
                           <div style={{fontWeight:600,fontSize:12,textDecoration:done?"line-through":"none"}}>{b.title}</div>
-                          <div style={{fontSize:10,color:T.muted}}>{b.startTime} – {b.endTime} · {b.hours}h · {b.slot}</div>
+                          <div style={{fontSize:10,color:T.muted}}>{to12h(b.startTime)} – {to12h(b.endTime)} · {b.hours}h</div>
                           {course&&<div style={{fontSize:10,color:course.color,marginTop:1}}>● {course.name}</div>}
                         </div>
                         <button onClick={()=>toggleStudyComplete(b.id)} style={{fontSize:10,padding:"3px 8px",borderRadius:6,border:`1px solid ${done?T.success:T.border2}`,background:done?`rgba(${hexToRgb(T.success)},.1)`:"transparent",color:done?T.success:T.muted,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{done?"✓ Done":"Mark Done"}</button>
@@ -1678,7 +1727,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                     {c.professor&&<div style={{fontSize:11,color:T.muted,marginBottom:4}}>👤 {c.professor}</div>}
                     <div style={{marginBottom:8}}>
                       {c.class_days?.length>0
-                        ?<div style={{fontSize:11,color:T.muted,display:"flex",alignItems:"center",gap:6}}>🗓 {c.class_days.join(", ")} {c.class_time&&`· ${c.class_time}`}{c.class_end_time&&` – ${c.class_end_time}`}
+                        ?<div style={{fontSize:11,color:T.muted,display:"flex",alignItems:"center",gap:6}}>🗓 {c.class_days.join(", ")} {c.class_time&&`· ${to12h(c.class_time)}`}{c.class_end_time&&` – ${to12h(c.class_end_time)}`}
                           <button onClick={()=>setCourses(p=>p.map(x=>x.id===c.id?{...x,_editSched:!x._editSched}:x))} style={{fontSize:10,color:T.accent,background:"transparent",border:"none",cursor:"pointer",padding:0}}>edit</button>
                         </div>
                         :<button onClick={()=>setCourses(p=>p.map(x=>x.id===c.id?{...x,_editSched:true}:x))} style={{fontSize:11,color:T.accent,background:"transparent",border:`1px dashed ${T.border2}`,borderRadius:6,padding:"2px 8px",cursor:"pointer",fontFamily:"inherit"}}>+ Add class schedule</button>
@@ -1864,7 +1913,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                       <div key={b.id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",background:dark?"#12121a":T.card,border:`1px solid ${T.border}`,borderRadius:8,marginBottom:4}}>
                         <div style={{flex:1}}>
                           <div style={{fontSize:12,fontWeight:600}}>{b.label}</div>
-                          <div style={{fontSize:10,color:T.muted}}>{b.date_specific?`Date: ${b.date_specific}`:`Every ${b.day_of_week}`} · {b.start_time}–{b.end_time}</div>
+                          <div style={{fontSize:10,color:T.muted}}>{b.date_specific?`Date: ${b.date_specific}`:`Every ${b.day_of_week}`} · {to12h(b.start_time)}–{to12h(b.end_time)}</div>
                         </div>
                         <button className="del-btn" onClick={()=>deleteScheduleBlock(b.id)}>🗑</button>
                       </div>
