@@ -442,6 +442,8 @@ export default function ProPlanScholar(){
   const[studyBlocks,setStudyBlocks]=useState([]);
   const[completedStudy,setCompletedStudy]=useState({}); // {blockId: true}
   const[showTimeTracker,setShowTimeTracker]=useState(false);
+  const[calToken,setCalToken]=useState(null); // user's calendar subscription token
+  const[calCopied,setCalCopied]=useState(false); // copy feedback
   const[trackerCategory,setTrackerCategory]=useState(null); // drill-down category
   const[milestones,setMilestones]=useState([]);
   const[scheduleBlocks,setScheduleBlocks]=useState([]);  // practice, greek, work events
@@ -574,6 +576,9 @@ export default function ProPlanScholar(){
     if(td.data)setTravelDates(td.data.map(x=>({...x,start:x.start_date,end:x.end_date})));
     if(el.data)setEnergyLog(el.data.map(x=>({date:x.log_date,level:x.level})));
     if(pr.data)setProfRatings(pr.data);
+    // Load or create calendar token
+    const{data:tokData}=await supabase.from("calendar_tokens").select("token").eq("user_id",uid).single();
+    if(tokData?.token){setCalToken(tokData.token);}
   }
 
   function notify(msg){setNotification(msg);setTimeout(()=>setNotification(""),3500);}
@@ -1022,6 +1027,23 @@ Return ONLY the JSON object, nothing else.`}
     await supabase.from("courses").update({rmp_data:rmp,difficulty:blended}).eq("id",cid);
     setCourses(p=>p.map(c=>c.id!==cid?c:{...c,rmpData:rmp,difficulty:blended}));
     setRmpResults(r=>({...r,[cid]:[]}));notify("RMP data applied — difficulty recalibrated!");
+  }
+
+  // ── Calendar sync ────────────────────────────────────────────────────────────
+  async function generateCalToken(){
+    // Create a random secure token for this user's calendar feed
+    const token=Array.from(crypto.getRandomValues(new Uint8Array(24))).map(b=>b.toString(16).padStart(2,"0")).join("");
+    const{error}=await supabase.from("calendar_tokens").upsert({user_id:authUser.id,token,created_at:new Date().toISOString()},{onConflict:"user_id"});
+    if(!error){setCalToken(token);notify("Calendar link generated!");}
+    else notify("Error generating link — try again.");
+  }
+
+  function copyCalUrl(){
+    const url=`https://academicplan.pro/api/calendar/${calToken}`;
+    navigator.clipboard.writeText(url).then(()=>{
+      setCalCopied(true);
+      setTimeout(()=>setCalCopied(false),2500);
+    });
   }
 
   // ── Professor Ratings (community) ────────────────────────────────────────────
@@ -2138,6 +2160,46 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                   </div>
                   <div style={{fontSize:12,color:T.muted}}>University theme is set during onboarding. Contact support to change it.</div>
                 </div>
+                <div className="card">
+                  <div style={{fontWeight:700,marginBottom:10}}>📅 Calendar Sync</div>
+                  <div style={{fontSize:12,color:T.muted,marginBottom:12,lineHeight:1.7}}>Subscribe to your ProPlan Scholar calendar in iPhone, Google, or Outlook. Classes, study sessions, due dates, and milestones — automatically updated.</div>
+                  {/* What syncs */}
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>
+                    {[["🎓","Classes"],["📌","Due Dates"],["📚","Study Blocks"],["⬟","Milestones"],["✈️","Blackouts"]].map(([icon,label])=>(
+                      <span key={label} style={{fontSize:11,padding:"3px 9px",background:T.subcard,border:`1px solid ${T.border2}`,borderRadius:100,color:T.muted,display:"flex",alignItems:"center",gap:4}}>{icon} {label}</span>
+                    ))}
+                  </div>
+                  {calToken?(
+                    <div>
+                      <div style={{fontSize:11,color:T.muted,marginBottom:6}}>Your personal calendar URL:</div>
+                      <div style={{display:"flex",gap:7,marginBottom:12}}>
+                        <div style={{flex:1,background:T.subcard,border:`1px solid ${T.border2}`,borderRadius:8,padding:"8px 10px",fontSize:10,color:T.muted,fontFamily:"monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                          https://academicplan.pro/api/calendar/{calToken.slice(0,12)}…
+                        </div>
+                        <button className="bp" style={{fontSize:12,padding:"8px 14px",flexShrink:0,background:calCopied?T.success:T.accent,transition:"background .3s"}} onClick={copyCalUrl}>
+                          {calCopied?"✓ Copied!":"Copy Link"}
+                        </button>
+                      </div>
+                      <div style={{fontSize:11,fontWeight:600,color:T.text,marginBottom:7}}>How to add to your calendar:</div>
+                      {[
+                        {p:"🍎 iPhone / iPad",s:"Settings → Calendar → Accounts → Add Account → Other → Add Subscribed Calendar → paste URL"},
+                        {p:"🟢 Google Calendar",s:'Other calendars (+) → "From URL" → paste URL → Add Calendar'},
+                        {p:"🔵 Outlook",s:"Add Calendar → Subscribe from web → paste URL"},
+                      ].map(x=>(
+                        <div key={x.p} style={{padding:"8px 10px",background:T.subcard,borderRadius:8,border:`1px solid ${T.border}`,marginBottom:6}}>
+                          <div style={{fontWeight:600,fontSize:12,marginBottom:3}}>{x.p}</div>
+                          <div style={{fontSize:11,color:T.muted,lineHeight:1.5}}>{x.s}</div>
+                        </div>
+                      ))}
+                      <button className="bg2" style={{fontSize:11,marginTop:8,width:"100%"}} onClick={generateCalToken}>🔄 Reset Calendar Link</button>
+                    </div>
+                  ):(
+                    <button className="bp" style={{width:"100%",fontSize:13}} onClick={generateCalToken}>
+                      Generate My Calendar Link
+                    </button>
+                  )}
+                </div>
+
                 <div className="card">
                   <div style={{fontWeight:700,marginBottom:10}}>Integrations (Coming Soon)</div>
                   {[{name:"SMS Reminders",icon:"📱",desc:"Text alerts for deadlines"},{name:"Outlook Calendar",icon:"📅",desc:"Sync via Microsoft Graph API"},{name:"Canvas / eLearning",icon:"📚",desc:"Auto-import assignments"},{name:"University Email",icon:"📧",desc:"Deadline reminders to inbox"}].map(item=>(
