@@ -261,7 +261,24 @@ function AuthScreen({onAuth}){
           {loading?"Please wait...":mode==="login"?"Sign In →":"Create Account →"}
         </button>
         {mode==="login"&&<div style={{textAlign:"center",marginTop:16,fontSize:12,color:"#7a7590"}}>No account? <span onClick={()=>switchMode("signup")} style={{color:"#6366f1",cursor:"pointer"}}>Sign up free</span></div>}
-        {mode==="signup"&&<div style={{textAlign:"center",marginTop:16,fontSize:12,color:"#7a7590"}}>Already have an account? <span onClick={()=>switchMode("login")} style={{color:"#6366f1",cursor:"pointer"}}>Sign in</span></div>}
+        {mode==="signup"&&(
+          <div>
+            <div style={{textAlign:"center",marginTop:16,fontSize:12,color:"#7a7590"}}>Already have an account? <span onClick={()=>switchMode("login")} style={{color:"#6366f1",cursor:"pointer"}}>Sign in</span></div>
+            <div style={{marginTop:16,padding:"12px 14px",background:"rgba(255,255,255,.04)",borderRadius:9,border:"1px solid rgba(255,255,255,.1)"}}>
+              <div style={{fontSize:11,color:"#7a7590",lineHeight:1.7,textAlign:"center"}}>
+                By creating an account you agree to our{" "}
+                <a href="/terms" target="_blank" rel="noreferrer" style={{color:"#6366f1"}}>Terms of Service</a>
+                {" "}and{" "}
+                <a href="/privacy" target="_blank" rel="noreferrer" style={{color:"#6366f1"}}>Privacy Policy</a>.
+              </div>
+            </div>
+            <div style={{marginTop:10,padding:"10px 14px",background:"rgba(199,91,18,.08)",borderRadius:9,border:"1px solid rgba(199,91,18,.2)"}}>
+              <div style={{fontSize:11,color:"#d97706",lineHeight:1.6,textAlign:"center"}}>
+                ⚠️ AI features are planning tools — not guarantees of academic outcomes. Always verify dates with your official syllabus.
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -500,7 +517,7 @@ export default function ProPlanScholar(){
   // Calendar state
   const[calYear,setCalYear]=useState(t.year);
   const[calMonth,setCalMonth]=useState(t.month);
-  const[selectedDay,setSelectedDay]=useState(null);
+  const[selectedDay,setSelectedDay]=useState(t.day);
 
   // Confirmation modal state
   const[confirmModal,setConfirmModal]=useState(null); // {message, onConfirm, detail}
@@ -577,8 +594,7 @@ export default function ProPlanScholar(){
     if(el.data)setEnergyLog(el.data.map(x=>({date:x.log_date,level:x.level})));
     if(pr.data)setProfRatings(pr.data);
     // Load or create calendar token
-    const{data:tokData}=await supabase.from("calendar_tokens").select("token").eq("user_id",uid).single();
-    if(tokData?.token){setCalToken(tokData.token);}
+    try{const{data:tokData}=await supabase.from("calendar_tokens").select("token").eq("user_id",uid).single();if(tokData?.token){setCalToken(tokData.token);}}catch(e){/* table may not exist yet, ignore */}
   }
 
   function notify(msg){setNotification(msg);setTimeout(()=>setNotification(""),3500);}
@@ -1065,10 +1081,10 @@ Return ONLY the JSON object, nothing else.`}
 
     // Assignment due dates
     assignments.forEach(a=>{
-      if(!a.due)return;
+      const aDue=a.due||a.due_date;if(!aDue)return;
       const c=courses.find(x=>x.id===a.courseId);
       events.push(["BEGIN:VEVENT",`UID:due-${a.id}@academicplan.pro`,`DTSTAMP:${stamp()}`,
-        `DTSTART;VALUE=DATE:${icsDate(a.due)}`,`DTEND;VALUE=DATE:${icsDate(a.due)}`,
+        `DTSTART;VALUE=DATE:${icsDate(aDue)}`,`DTEND;VALUE=DATE:${icsDate(aDue)}`,
         `SUMMARY:📌 ${esc(a.title)} — DUE`,
         `DESCRIPTION:Course: ${esc(c?.name||"")}\\nType: ${esc(a.type||"")}`,
         "CATEGORIES:ASSIGNMENT",a.done?"STATUS:COMPLETED":"STATUS:CONFIRMED",
@@ -1090,7 +1106,7 @@ Return ONLY the JSON object, nothing else.`}
     milestones.forEach(m=>{
       if(!m.due)return;
       events.push(["BEGIN:VEVENT",`UID:ms-${m.id}@academicplan.pro`,`DTSTAMP:${stamp()}`,
-        `DTSTART;VALUE=DATE:${icsDate(m.due)}`,`DTEND;VALUE=DATE:${icsDate(m.due)}`,
+        `DTSTART;VALUE=DATE:${icsDate(mDue)}`,`DTEND;VALUE=DATE:${icsDate(mDue)}`,
         `SUMMARY:⬟ ${esc(m.title)}`,m.notes?`DESCRIPTION:${esc(m.notes)}`:"",
         "CATEGORIES:MILESTONE",m.done?"STATUS:COMPLETED":"STATUS:CONFIRMED",
         "END:VEVENT"].filter(Boolean).join("\r\n"));
@@ -1133,8 +1149,9 @@ Return ONLY the JSON object, nothing else.`}
   // Keep token functions for future server-side use
   async function generateCalToken(){
     const token=Array.from(crypto.getRandomValues(new Uint8Array(24))).map(b=>b.toString(16).padStart(2,"0")).join("");
-    await supabase.from("calendar_tokens").upsert({user_id:authUser.id,token,created_at:new Date().toISOString()},{onConflict:"user_id"}).catch(()=>{});
+    try{await supabase.from("calendar_tokens").upsert({user_id:authUser.id,token,created_at:new Date().toISOString()},{onConflict:"user_id"});}catch(e){}
     setCalToken(token);
+    notify("Calendar link ready!");
   }
 
   function copyCalUrl(){
@@ -1256,8 +1273,8 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
       classes:classTimes,
     };
   }
-  function prevMonth(){calMonth===0?(setCalYear(y=>y-1),setCalMonth(11)):setCalMonth(m=>m-1);}
-  function nextMonth(){calMonth===11?(setCalYear(y=>y+1),setCalMonth(0)):setCalMonth(m=>m+1);}
+  function prevMonth(){setSelectedDay(null);calMonth===0?(setCalYear(y=>y-1),setCalMonth(11)):setCalMonth(m=>m-1);}
+  function nextMonth(){setSelectedDay(null);calMonth===11?(setCalYear(y=>y+1),setCalMonth(0)):setCalMonth(m=>m+1);}
 
   // ── Derived values ─────────────────────────────────────────────────────────
   // ── Time tracker calculations ──────────────────────────────────────────────
@@ -1344,44 +1361,274 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
 
   // ── Global CSS ─────────────────────────────────────────────────────────────
   const css=`
-    *{box-sizing:border-box;margin:0;padding:0;}
-    ::-webkit-scrollbar{width:5px;}::-webkit-scrollbar-thumb{background:${T.scrollThumb};border-radius:3px;}
-    body,input,select,textarea{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;}button{cursor:pointer;font-family:inherit;}
-    .fi{animation:fi .25s ease;}@keyframes fi{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
-    .card{background:${T.card};border:1px solid ${T.border};border-radius:12px;padding:18px;transition:background .25s,border .25s;}
-    .bp{background:${T.accent};color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;transition:all .2s;}.bp:hover{filter:brightness(1.1);}
-    .bg2{background:transparent;color:${T.muted};border:1px solid ${T.border2};border-radius:8px;padding:7px 13px;font-size:12px;transition:all .2s;}.bg2:hover{border-color:${T.accent};color:${T.text};}
-    .tag{display:inline-block;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;}
-    .ifield{background:${T.inputBg};border:1px solid ${T.border2};border-radius:8px;padding:8px 12px;color:${T.text};font-size:13px;width:100%;outline:none;transition:border-color .2s;}.ifield:focus{border-color:${T.accent};}
-    .mo{position:fixed;inset:0;background:${T.overlay};display:flex;align-items:center;justify-content:center;z-index:200;}
-    .md{background:${T.card};border:1px solid ${T.border2};border-radius:16px;padding:24px;width:min(93vw,480px);max-height:90vh;overflow-y:auto;}
-    .nb{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;border:1px solid transparent;font-size:13px;text-align:left;transition:all .2s;width:100%;background:transparent;}.nb:hover{background:${T.hoverBg};}
-    .flip-card{perspective:800px;width:100%;height:195px;cursor:pointer;}
-    .flip-inner{position:relative;width:100%;height:100%;transition:transform .5s;transform-style:preserve-3d;}
-    .flip-inner.flipped{transform:rotateY(180deg);}
-    .flip-face{position:absolute;inset:0;backface-visibility:hidden;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;text-align:center;}
-    .flip-back{transform:rotateY(180deg);}
-    @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
-    .prog-bar{background:${T.border};border-radius:4px;height:5px;overflow:hidden;}
-    .prog-fill{height:100%;border-radius:4px;transition:width .4s;}
-    .del-btn{background:transparent;border:1px solid ${T.border2};border-radius:6px;padding:3px 8px;font-size:11px;color:${T.danger};cursor:pointer;transition:all .2s;}.del-btn:hover{background:rgba(239,68,68,.08);border-color:${T.danger};}
-    @media(max-width:768px){
-      .main-content{padding:14px 16px 80px!important;} /* bottom padding for iOS home bar */
-      .nb{min-height:44px;} /* Apple HIG minimum touch target */
-      .bp,.bg2,.del-btn{min-height:38px;}
-      input,select,textarea{font-size:16px!important;} /* prevents iOS zoom on focus */
+  /* ── Reset & base ─────────────────────────────────────── */
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  body,input,select,textarea{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased;}
+  button{cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent;}
+  input,select,textarea{font-size:16px!important;} /* prevent iOS zoom */
+
+  /* ── Scrollbars ───────────────────────────────────────── */
+  ::-webkit-scrollbar{width:4px;height:4px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:${T.scrollThumb};border-radius:4px;}
+
+  /* ── Animations ───────────────────────────────────────── */
+  @keyframes fi{from{opacity:0;transform:translateY(-8px);}to{opacity:1;transform:translateY(0);}}
+  @keyframes slideUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+  @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.5;}}
+
+  /* ── Layout primitives ────────────────────────────────── */
+  .fi{animation:fi .25s ease;}
+  .slide-up{animation:slideUp .3s ease;}
+
+  /* ── Cards ────────────────────────────────────────────── */
+  .card{
+    background:${T.card};
+    border:1px solid ${T.border};
+    border-radius:16px;
+    padding:18px 16px;
+  }
+
+  /* ── Buttons ──────────────────────────────────────────── */
+  .bp{
+    background:${T.accent};
+    color:#fff;
+    border:none;
+    border-radius:12px;
+    padding:12px 20px;
+    font-size:14px;
+    font-weight:600;
+    min-height:48px;
+    transition:opacity .15s,transform .15s;
+  }
+  .bp:hover{opacity:.9;}
+  .bp:active{transform:scale(.97);}
+
+  .bg2{
+    background:${T.hoverBg};
+    color:${T.text};
+    border:1px solid ${T.border2};
+    border-radius:12px;
+    padding:12px 16px;
+    font-size:13px;
+    font-weight:500;
+    min-height:44px;
+    transition:opacity .15s;
+  }
+  .bg2:hover{opacity:.8;}
+
+  /* ── Nav buttons (sidebar) ────────────────────────────── */
+  .nb{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:10px 12px;
+    border-radius:10px;
+    border:none;
+    background:transparent;
+    font-size:14px;
+    font-weight:500;
+    min-height:44px;
+    width:100%;
+    text-align:left;
+    transition:background .15s;
+  }
+  .nb:active{transform:scale(.98);}
+
+  /* ── Bottom tab bar ───────────────────────────────────── */
+  .tab-bar{
+    position:fixed;
+    bottom:0;left:0;right:0;
+    height:64px;
+    background:${T.sidebar};
+    border-top:1px solid ${T.border};
+    display:flex;
+    align-items:stretch;
+    z-index:90;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .tab-item{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:3px;
+    border:none;
+    background:transparent;
+    color:${T.faint};
+    font-size:10px;
+    font-weight:500;
+    min-height:64px;
+    position:relative;
+    transition:color .15s;
+    padding:0 2px;
+  }
+  .tab-item.active{color:${T.accent};}
+  .tab-item-icon{font-size:20px;line-height:1;}
+  .tab-badge{
+    position:absolute;
+    top:8px;right:calc(50% - 14px);
+    background:${T.danger};
+    color:#fff;
+    border-radius:10px;
+    font-size:9px;
+    font-weight:700;
+    padding:1px 5px;
+    min-width:16px;
+    text-align:center;
+  }
+
+  /* ── Mobile header ────────────────────────────────────── */
+  .mobile-header{
+    display:none;
+    position:fixed;
+    top:0;left:0;right:0;
+    height:56px;
+    background:${T.sidebar};
+    border-bottom:1px solid ${T.border};
+    align-items:center;
+    justify-content:space-between;
+    padding:0 16px;
+    z-index:90;
+    padding-top:env(safe-area-inset-top);
+  }
+
+  /* ── Form inputs ──────────────────────────────────────── */
+  .ifield{
+    width:100%;
+    background:${T.inputBg};
+    border:1.5px solid ${T.border2};
+    border-radius:10px;
+    padding:12px 14px;
+    color:${T.text};
+    outline:none;
+    font-family:inherit;
+    transition:border-color .2s;
+  }
+  .ifield:focus{border-color:${T.accent};}
+
+  /* ── Modal / Sheet ────────────────────────────────────── */
+  .mo{
+    position:fixed;inset:0;
+    background:${T.overlay};
+    display:flex;align-items:flex-end;
+    justify-content:center;
+    z-index:200;
+    animation:fadeIn .2s ease;
+  }
+  .md{
+    background:${T.card};
+    border-radius:20px 20px 0 0;
+    padding:24px 20px;
+    padding-bottom:calc(24px + env(safe-area-inset-bottom));
+    width:100%;
+    max-width:600px;
+    max-height:92vh;
+    overflow-y:auto;
+    animation:slideUp .3s ease;
+  }
+  .md::before{
+    content:'';
+    display:block;
+    width:36px;height:4px;
+    background:${T.border2};
+    border-radius:2px;
+    margin:0 auto 20px;
+  }
+
+  /* ── Tags & badges ────────────────────────────────────── */
+  .tag{
+    display:inline-flex;align-items:center;
+    padding:2px 8px;
+    border-radius:6px;
+    font-size:11px;
+    font-weight:600;
+  }
+  .del-btn{
+    background:transparent;
+    border:1px solid ${T.border2};
+    border-radius:8px;
+    padding:6px 10px;
+    font-size:12px;
+    color:${T.danger};
+    min-height:36px;
+    transition:all .15s;
+  }
+  .del-btn:hover{background:rgba(239,68,68,.08);border-color:${T.danger};}
+
+  /* ── Progress bar ─────────────────────────────────────── */
+  .prog-bar{height:4px;background:${T.border};border-radius:2px;overflow:hidden;margin-bottom:4px;}
+  .prog-fill{height:100%;border-radius:2px;transition:width .4s ease;}
+
+  /* ── Flashcards ───────────────────────────────────────── */
+  .flip-card{perspective:1000px;cursor:pointer;}
+  .flip-inner{position:relative;transform-style:preserve-3d;transition:transform .5s;}
+  .flipped .flip-inner{transform:rotateY(180deg);}
+  .flip-face{position:absolute;width:100%;height:100%;backface-visibility:hidden;border-radius:16px;}
+  .flip-back{transform:rotateY(180deg);}
+
+  /* ── Stat cards ───────────────────────────────────────── */
+  .stat-card{transition:transform .2s,box-shadow .2s;cursor:pointer;}
+  @media(max-width:768px){
+    .course-grid{grid-template-columns:1fr!important;}
+  }
+  .stat-card:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(${rgb},.15);}
+  .stat-card:active{transform:scale(.97);}
+
+  /* ── Desktop sidebar reopen tab ───────────────────────── */
+  .sidebar-tab{
+    position:fixed;left:0;top:50%;
+    transform:translateY(-50%);
+    z-index:50;
+    background:${T.accent};
+    color:#fff;
+    border-radius:0 8px 8px 0;
+    padding:14px 6px;
+    cursor:pointer;
+    display:flex;flex-direction:column;
+    align-items:center;gap:3px;
+    box-shadow:2px 0 12px rgba(0,0,0,.2);
+    transition:opacity .2s;
+  }
+  .sidebar-tab:hover{opacity:.9;}
+
+  /* ── Mobile responsive ─────────────────────────────────── */
+  @media(max-width:768px){
+    .mobile-header{display:flex!important;}
+    .tab-bar{display:flex!important;}
+    .desktop-sidebar{display:none!important;}
+    .main-content{
+      padding:72px 16px 88px!important;
     }
-    /* iOS safe area support */
-    @supports(padding:max(0px)){
-      .main-content{
-        padding-left:max(16px,env(safe-area-inset-left))!important;
-        padding-right:max(16px,env(safe-area-inset-right))!important;
-        padding-bottom:max(80px,calc(env(safe-area-inset-bottom)+16px))!important;
-      }
+    /* Sheet modals */
+    .mo{align-items:flex-end;}
+    /* Full-width cards */
+    .settings-grid{grid-template-columns:1fr!important;}
+    .course-grid{grid-template-columns:1fr!important;}
+    /* Bigger tap targets */
+    .bp,.bg2{min-height:48px;}
+  }
+
+  /* ── Desktop ───────────────────────────────────────────── */
+  @media(min-width:769px){
+    .tab-bar{display:none!important;}
+    .mobile-header{display:none!important;}
+    .mo{align-items:center;}
+    .md{border-radius:20px;max-height:85vh;}
+    .md::before{display:none;}
+    .main-content{padding:24px 28px!important;}
+  }
+
+  /* ── iOS safe areas ────────────────────────────────────── */
+  @supports(padding:max(0px)){
+    .main-content{
+      padding-left:max(16px,env(safe-area-inset-left))!important;
+      padding-right:max(16px,env(safe-area-inset-right))!important;
     }
-    .stat-card:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(${rgb},.2);cursor:pointer;}
-    .stat-card{transition:transform .2s,box-shadow .2s;}
-  `;
+  }
+`
 
   // ── Auth / onboarding gates ─────────────────────────────────────────────────
   // Guard: if supabase failed to init, show config error instead of crashing
@@ -1417,36 +1664,59 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
 
   // ─── MAIN APP RENDER ───────────────────────────────────────────────────────
   return(
-    <div style={{fontFamily:"'Inter','Plus Jakarta Sans',system-ui,sans-serif",height:"100vh",display:"flex",flexDirection:"column",background:T.bg,color:T.text,transition:"background .25s,color .25s"}}>
+    <div style={{fontFamily:"'Inter','Plus Jakarta Sans',system-ui,sans-serif",minHeight:"100vh",background:T.bg,color:T.text,transition:"background .25s,color .25s",overflowX:"hidden"}}>
       <style>{css}</style>
 
-      {/* Toast notification */}
-      {notification&&<div style={{position:"fixed",top:16,right:16,background:T.success,color:"#fff",padding:"10px 18px",borderRadius:10,zIndex:999,fontSize:13,boxShadow:`0 4px 20px rgba(${hexToRgb(T.success)},.4)`,animation:"fi .3s ease"}}>{notification}</div>}
+      {/* ── Toast ─────────────────────────────────────────── */}
+      {notification&&<div style={{position:"fixed",top:"max(16px,env(safe-area-inset-top))",left:"50%",transform:"translateX(-50%)",background:T.success,color:"#fff",padding:"10px 20px",borderRadius:100,zIndex:999,fontSize:13,fontWeight:600,boxShadow:`0 4px 20px rgba(${hexToRgb(T.success)},.35)`,animation:"fi .3s ease",whiteSpace:"nowrap",maxWidth:"calc(100vw - 32px)",textAlign:"center"}}>{notification}</div>}
 
-      <div style={{display:"flex",flex:1,overflow:"hidden"}}>
-
-        {/* ═══ SIDEBAR ═══ */}
-        {/* Mobile overlay */}
-        {/* Mobile overlay — closes sidebar when tapping outside */}
-        {isMobile&&sidebarOpen&&<div onClick={()=>setSidebar(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:99}}/>}
-        <aside style={{width:sidebarOpen?240:0,minWidth:sidebarOpen?240:0,background:T.sidebar,borderRight:sidebarOpen?`1px solid ${T.border}`:"none",display:"flex",flexDirection:"column",flexShrink:0,overflow:"hidden",transition:"width .25s ease,min-width .25s ease",position:isMobile?"fixed":"relative",top:isMobile?0:"auto",left:isMobile?0:"auto",bottom:isMobile?0:"auto",zIndex:isMobile?100:"auto",boxShadow:isMobile&&sidebarOpen?"4px 0 24px rgba(0,0,0,.4)":"none"}}>
-          <div style={{padding:"14px 9px 12px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:sidebarOpen?"space-between":"center",background:`linear-gradient(135deg,rgba(${rgb},.12),rgba(${rgb},.04))`}}>
-            {sidebarOpen&&<div style={{overflow:"hidden",marginRight:5}}>
-              <div style={{fontSize:9,letterSpacing:3,color:T.accent,textTransform:"uppercase",fontWeight:700,whiteSpace:"nowrap"}}>{uni.abbr} · {profile.full_name?.split(" ")[0]}</div>
-              <div style={{fontSize:17,fontWeight:700,color:T.text,whiteSpace:"nowrap"}}>{uni.logo} ProPlan Scholar</div>
-              {uni.mascot&&<div style={{fontSize:9,color:T.faint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{uni.mascot}</div>}
-            </div>}
-            <button onClick={()=>setSidebar(o=>!o)} style={{background:"transparent",border:`1px solid ${T.border2}`,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",color:T.muted,fontSize:11,flexShrink:0}}>{sidebarOpen?"←":"→"}</button>
+      {/* ── Mobile header ─────────────────────────────────── */}
+      <header className="mobile-header" style={{paddingTop:`max(12px,env(safe-area-inset-top))`}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{width:30,height:30,borderRadius:8,background:`rgba(${rgb},.15)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>{uni.logo}</div>
+          <div>
+            <div style={{fontSize:14,fontWeight:700,color:T.text,lineHeight:1.1}}>ProPlan Scholar</div>
+            <div style={{fontSize:10,color:T.muted,lineHeight:1}}>{uni.abbr} · {profile.full_name?.split(" ")[0]}</div>
           </div>
-          <nav style={{flex:1,padding:"9px 6px",display:"flex",flexDirection:"column",gap:2,overflowY:"auto"}}>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>setChatOpen(o=>!o)} style={{width:36,height:36,borderRadius:10,background:chatOpen?`rgba(${rgb},.15)`:T.hoverBg,border:`1px solid ${chatOpen?T.accent:T.border2}`,color:chatOpen?T.accent:T.muted,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>💬</button>
+          <button onClick={async()=>{const nd=!dark;setDark(nd);await supabase?.from("profiles").update({dark_mode:nd}).eq("id",authUser.id);}} style={{width:36,height:36,borderRadius:10,background:T.hoverBg,border:`1px solid ${T.border2}`,color:T.muted,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>{dark?"☀️":"🌙"}</button>
+        </div>
+      </header>
+
+      <div style={{display:"flex",height:"100vh",overflow:"hidden"}}>
+
+        {/* ═══ DESKTOP SIDEBAR ═══ */}
+        {/* Desktop sidebar reopen tab */}
+        {!sidebarOpen&&!isMobile&&(
+          <div className="sidebar-tab" onClick={()=>setSidebar(true)}>
+            <div style={{width:14,height:2,background:"#fff",borderRadius:2}}/>
+            <div style={{width:14,height:2,background:"#fff",borderRadius:2}}/>
+            <div style={{width:14,height:2,background:"#fff",borderRadius:2}}/>
+          </div>
+        )}
+
+        <aside className="desktop-sidebar" style={{width:sidebarOpen?248:0,minWidth:sidebarOpen?248:0,background:T.sidebar,borderRight:sidebarOpen?`1px solid ${T.border}`:"none",display:"flex",flexDirection:"column",flexShrink:0,overflow:"hidden",transition:"width .25s ease,min-width .25s ease"}}>
+          {/* Sidebar header */}
+          <div style={{padding:"16px 12px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",background:`linear-gradient(135deg,rgba(${rgb},.1),transparent)`}}>
+            <div style={{overflow:"hidden",flex:1,marginRight:8}}>
+              <div style={{fontSize:9,letterSpacing:2.5,color:T.accent,textTransform:"uppercase",fontWeight:700,whiteSpace:"nowrap",marginBottom:2}}>{uni.abbr} · {profile.full_name?.split(" ")[0]}</div>
+              <div style={{fontSize:16,fontWeight:700,color:T.text,whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}><span>{uni.logo}</span> ProPlan Scholar</div>
+              {uni.mascot&&<div style={{fontSize:9,color:T.faint,marginTop:1}}>{uni.mascot}</div>}
+            </div>
+            <button onClick={()=>setSidebar(o=>!o)} style={{background:T.hoverBg,border:`1px solid ${T.border2}`,borderRadius:8,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",color:T.muted,fontSize:12,flexShrink:0}}>←</button>
+          </div>
+          {/* Nav items */}
+          <nav style={{flex:1,padding:"8px",display:"flex",flexDirection:"column",gap:2,overflowY:"auto"}}>
             {NAV.map(item=>{
               const badge=item.id==="assignments"?overdue.length:item.id==="calendar"&&todayStudy.length>0?todayStudy.length:0;
               return(
-              <button key={item.id} onClick={()=>{setView(item.id);if(isMobile)setSidebar(false);}} title={item.label} className="nb" style={{background:view===item.id?`rgba(${rgb},.12)`:"transparent",border:`1px solid ${view===item.id?T.accent:"transparent"}`,color:view===item.id?T.accent:T.muted,justifyContent:sidebarOpen?"flex-start":"center",position:"relative"}}>
-                <span style={{fontSize:16,flexShrink:0}}>{item.icon}</span>
-                {sidebarOpen&&<span style={{whiteSpace:"nowrap",overflow:"hidden",flex:1}}>{item.label}</span>}
-                {badge>0&&<span style={{background:T.danger,color:"#fff",borderRadius:10,fontSize:9,fontWeight:700,padding:"1px 5px",minWidth:16,textAlign:"center",flexShrink:0}}>{badge}</span>}
-              </button>
+                <button key={item.id} onClick={()=>setView(item.id)} title={item.label} className="nb" style={{background:view===item.id?`rgba(${rgb},.12)`:"transparent",border:`1px solid ${view===item.id?T.accent:"transparent"}`,color:view===item.id?T.accent:T.muted,justifyContent:"flex-start"}}>
+                  <span style={{fontSize:18,width:26,textAlign:"center",flexShrink:0}}>{item.icon}</span>
+                  <span style={{flex:1,fontSize:14}}>{item.label}</span>
+                  {badge>0&&<span style={{background:T.danger,color:"#fff",borderRadius:10,fontSize:9,fontWeight:700,padding:"2px 6px",minWidth:18,textAlign:"center"}}>{badge}</span>}
+                </button>
               );
             })}
           </nav>
@@ -1468,34 +1738,32 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
               <span style={{fontSize:14}}>🤖</span>
               {sidebarOpen&&<span style={{fontSize:12,whiteSpace:"nowrap"}}>AI Assistant</span>}
             </button>
-            <button onClick={async()=>{await supabase.auth.signOut();setAuthUser(null);setProfile(null);setCourses([]);setAssignments([]);setMilestones([]);setScheduleBlocks([]);setTravelDates([]);setEnergyLog([]);}} className="nb" style={{justifyContent:sidebarOpen?"flex-start":"center",color:T.faint,borderRadius:8,padding:"6px 9px"}}>
+            <div style={{padding:"8px",display:"flex",flexDirection:"column",gap:4,borderTop:`1px solid ${T.border}`}}>
+            <div style={{display:"flex",gap:6}}>
+              <button onClick={()=>setChatOpen(o=>!o)} className="nb" style={{flex:1,justifyContent:"center",background:chatOpen?`rgba(${rgb},.12)`:"transparent",border:`1px solid ${chatOpen?T.accent:T.border2}`,color:chatOpen?T.accent:T.muted,borderRadius:10,minHeight:36}}>
+                <span style={{fontSize:14}}>💬</span><span style={{fontSize:12}}>AI Chat</span>
+              </button>
+              <button onClick={async()=>{const nd=!dark;setDark(nd);await supabase?.from("profiles").update({dark_mode:nd}).eq("id",authUser.id);}} className="nb" style={{width:36,flexShrink:0,justifyContent:"center",border:`1px solid ${T.border2}`,borderRadius:10,minHeight:36,padding:0}}>
+                <span style={{fontSize:14}}>{dark?"☀️":"🌙"}</span>
+              </button>
+            </div>
+            <button onClick={async()=>{await supabase.auth.signOut();setAuthUser(null);setProfile(null);setCourses([]);setAssignments([]);setMilestones([]);setScheduleBlocks([]);setTravelDates([]);setEnergyLog([]);}} className="nb" style={{justifyContent:"flex-start",color:T.faint,borderRadius:10,padding:"8px 10px",fontSize:13}}>
               <span style={{fontSize:14}}>↩</span>
-              {sidebarOpen&&<span style={{fontSize:12,whiteSpace:"nowrap"}}>Sign Out</span>}
+              <span style={{fontSize:13,whiteSpace:"nowrap"}}>Sign Out</span>
             </button>
+            <div style={{display:"flex",gap:14,padding:"4px 4px 0"}}>
+              <a href="/privacy" target="_blank" rel="noreferrer" style={{fontSize:10,color:T.faint,textDecoration:"none"}}>Privacy</a>
+              <a href="/terms" target="_blank" rel="noreferrer" style={{fontSize:10,color:T.faint,textDecoration:"none"}}>Terms</a>
+              <span style={{fontSize:10,color:T.faint}}>© 2026</span>
+            </div>
           </div>
+        </div>
         </aside>
 
         {/* ═══ MAIN CONTENT ═══ */}
-        {/* Desktop sidebar reopen tab — only visible when sidebar is collapsed on desktop */}
-        {!sidebarOpen&&!isMobile&&(
-          <div onClick={()=>setSidebar(true)} title="Open sidebar" style={{position:"fixed",left:0,top:"50%",transform:"translateY(-50%)",zIndex:50,background:T.accent,color:"#fff",borderRadius:"0 8px 8px 0",padding:"14px 6px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,boxShadow:"2px 0 12px rgba(0,0,0,.2)",transition:"all .2s"}}>
-            <div style={{width:14,height:2,background:"#fff",borderRadius:2}}/>
-            <div style={{width:14,height:2,background:"#fff",borderRadius:2}}/>
-            <div style={{width:14,height:2,background:"#fff",borderRadius:2}}/>
-          </div>
-        )}
-        <main className="main-content" style={{flex:1,overflowY:"auto",padding:"22px 26px",minWidth:0,position:"relative"}}>
-          {/* Hamburger — subtle, top of page, mobile only */}
-          {isMobile&&!sidebarOpen&&(
-            <button onClick={()=>setSidebar(true)} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",marginBottom:14,background:T.card,border:`1px solid ${T.border2}`,borderRadius:9,cursor:"pointer",color:T.muted,fontSize:12,width:"100%",maxWidth:200}}>
-              <div style={{display:"flex",flexDirection:"column",gap:3,flexShrink:0}}>
-                <div style={{width:14,height:2,background:T.muted,borderRadius:2}}/>
-                <div style={{width:14,height:2,background:T.muted,borderRadius:2}}/>
-                <div style={{width:14,height:2,background:T.muted,borderRadius:2}}/>
-              </div>
-              <span style={{fontSize:12,color:T.muted}}>{uni.logo} Menu</span>
-            </button>
-          )}
+
+        <main className="main-content" style={{flex:1,overflowY:"auto",padding:"24px 28px",minWidth:0,position:"relative",WebkitOverflowScrolling:"touch"}}>
+
 
           {/* PWA Install Banner */}
           {showInstallBanner&&installPrompt&&(
@@ -1527,7 +1795,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
               </div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:10,marginBottom:14}}>
                 {[{l:"Courses",v:courses.length,c:T.accent,nav:"courses"},{l:"Pending",v:assignments.filter(a=>!a.done).length,c:T.warning,nav:"assignments"},{l:"Study Hrs Complete",v:Object.keys(completedStudy).filter(k=>completedStudy[k]).length*2,c:"#0ea5e9",nav:"calendar"},{l:"Milestones",v:milestones.filter(m=>!m.done).length,c:"#a78bfa",nav:"dissertation"},{l:"Done",v:assignments.filter(a=>a.done).length,c:T.success,nav:"assignments"}].map(s=>(
-                  <div key={s.l} className="card stat-card" onClick={()=>setView(s.nav)} title={`Go to ${s.nav}`} style={{textAlign:"center",borderTop:`2px solid ${s.c}`}}>
+                  <div key={s.l} className="card stat-card" onClick={()=>setView(s.nav)} title={`Go to ${s.nav}`} style={{textAlign:"center",borderTop:`2px solid ${s.c}`,minWidth:90,flexShrink:0}}>
                     <div style={{fontSize:26,fontWeight:700,color:s.c}}>{s.v}</div>
                     <div style={{fontSize:9,color:T.muted,marginTop:2,letterSpacing:1,textTransform:"uppercase"}}>{s.l}</div>
                   </div>
@@ -1652,7 +1920,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                   </div>
                 </div>
               </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <div class="settings-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                 <div className="card" style={{borderLeft:`3px solid ${T.accent}`}}>
                   <div style={{fontSize:10,letterSpacing:2,color:T.accent,textTransform:"uppercase",marginBottom:7}}>{["doctoral","postdoc"].includes(profile?.degree_level)?"Dissertation Progress":["graduate"].includes(profile?.degree_level)?"Thesis Progress":"Major Project Progress"}</div>
                   {nextMilestone?(<>
@@ -1709,11 +1977,11 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                   const isToday=calYear===t.year&&calMonth===t.month&&day===t.day;
                   const isSel=selectedDay===day;
                   return(
-                    <div key={i} onClick={()=>setSelectedDay(isSel?null:day)} style={{minHeight:60,padding:4,borderRadius:7,cursor:"pointer",background:travel?(dark?"#1a1510":"#fff8ee"):isSel?(dark?"#1e1e35":"#ebebff"):isToday?(dark?"#16162a":"#f0f0ff"):(dark?"#12121a":T.card),border:`1px solid ${isToday?T.accent:T.border}`,transition:"all .15s"}}>
+                    <div key={i} onClick={()=>setSelectedDay(isSel?null:day)} style={{minHeight:54,padding:4,borderRadius:8,cursor:"pointer",background:travel?(dark?"#1a1510":"#fff8ee"):isSel?(dark?"#1e1e35":"#ebebff"):isToday?(dark?"#16162a":"#f0f0ff"):(dark?"#12121a":T.card),border:`1px solid ${isToday?T.accent:T.border}`,transition:"all .15s"}}>
                       <div style={{fontSize:11,fontWeight:isToday?700:400,color:isToday?T.accent:T.text,marginBottom:2}}>{day}{travel&&" ✈"}</div>
                       {classes.map(c=><div key={c.id} style={{fontSize:8,padding:"1px 4px",borderRadius:3,background:"rgba(16,185,129,.2)",color:"#10b981",marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600}}>🎓 {c.name.length>10?c.name.slice(0,10)+"…":c.name}{c.class_time&&" "+to12h(c.class_time)}</div>)}
                       {asgn.map(a=>{const col=courses.find(c=>c.id===a.courseId)?.color||T.accent;return(<div key={a.id} style={{fontSize:8,padding:"1px 4px",borderRadius:3,background:`rgba(${hexToRgb(col)},.2)`,color:col,marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>📌 {a.title.length>10?a.title.slice(0,10)+"…":a.title}</div>);})}
-                      {study.slice(0,2).map(b=>{const done=completedStudy[b.id];const bCourse=courses.find(c=>c.id===b.courseId);return(<div key={b.id} style={{fontSize:8,padding:"1px 4px",borderRadius:3,background:done?`rgba(${hexToRgb(bCourse?.color||"34,197,94")},.15)`:`rgba(${hexToRgb(bCourse?.color||"14,165,233")},.2)`,color:done?"#22c55e":bCourse?.color||"#38bdf8",marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textDecoration:done?"line-through":"none",fontWeight:500}}>📚 {to12h(b.startTime)} {b.title.length>10?b.title.slice(0,10)+"…":b.title}</div>);})}
+                      {study.slice(0,2).map(b=>{const done=completedStudy[b.id];const bCourse=courses.find(c=>c.id===b.courseId);return(<div key={b.id} style={{fontSize:8,padding:"1px 4px",borderRadius:3,background:done?`rgba(${hexToRgb(bCourse?.color||"34,197,94")},.15)`:`rgba(${hexToRgb(bCourse?.color||"14,165,233")},.2)`,color:done?"#22c55e":bCourse?.color||"#38bdf8",marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textDecoration:done?"line-through":"none",fontWeight:500}}>📚 {to12h(b.startTime)} {(b.title||"Study").length>10?(b.title||"Study").slice(0,10)+"…":(b.title||"Study")}</div>);})}
                       {milestone&&<div style={{fontSize:8,padding:"1px 4px",borderRadius:3,background:"rgba(167,139,250,.2)",color:"#a78bfa",marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>⬟ {milestone.title.length>10?milestone.title.slice(0,10)+"…":milestone.title}</div>}
                       {study.length>2&&<div style={{fontSize:7,color:T.faint}}>+{study.length-2} more</div>}
                     </div>
@@ -2226,6 +2494,18 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
           {view==="settings"&&(
             <div className="fi">
               <div style={{marginBottom:13}}><div style={{fontSize:10,letterSpacing:3,color:T.accent,textTransform:"uppercase"}}>Preferences</div><h1 style={{fontSize:22,fontWeight:700}}>Settings</h1></div>
+              {/* AI Disclaimer */}
+              <div style={{marginBottom:14,padding:"12px 16px",borderRadius:12,border:`1px solid rgba(245,158,11,.35)`,background:dark?"rgba(245,158,11,.06)":"rgba(245,158,11,.05)",display:"flex",gap:10,alignItems:"flex-start"}}>
+                <span style={{fontSize:18,flexShrink:0}}>⚠️</span>
+                <div>
+                  <div style={{fontWeight:600,fontSize:12,color:T.caution,marginBottom:4}}>AI Disclaimer</div>
+                  <div style={{fontSize:11,color:T.muted,lineHeight:1.7}}>Study schedules, extracted syllabus content, flashcards, and AI advice are planning tools only — not guarantees of accuracy or academic outcomes. Always verify important dates with your official course materials. Using ProPlan Scholar does not guarantee any particular grade or result.</div>
+                  <div style={{marginTop:6,display:"flex",gap:14}}>
+                    <a href="/privacy" target="_blank" rel="noreferrer" style={{fontSize:11,color:T.accent}}>Privacy Policy →</a>
+                    <a href="/terms" target="_blank" rel="noreferrer" style={{fontSize:11,color:T.accent}}>Terms of Service →</a>
+                  </div>
+                </div>
+              </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                 <div className="card">
                   <div style={{fontWeight:700,marginBottom:10}}>Your Profile</div>
@@ -2489,6 +2769,24 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
           <div style={{display:"flex",gap:8,marginTop:4}}><button className="bg2" style={{flex:1}} onClick={()=>setEditAssign(null)}>Cancel</button><button className="bp" style={{flex:1}} onClick={saveEditAssignment}>Save Changes</button></div>
         </div>
       </div></div>)}
+
+      {/* ═══ BOTTOM TAB BAR (mobile only) ═══ */}
+      <nav className="tab-bar">
+        {NAV.slice(0,5).map(item=>{
+          const badge=item.id==="assignments"?overdue.length:item.id==="calendar"&&todayStudy.length>0?todayStudy.length:0;
+          return(
+            <button key={item.id} className={`tab-item${view===item.id?" active":""}`} onClick={()=>setView(item.id)}>
+              {badge>0&&<span className="tab-badge">{badge}</span>}
+              <span className="tab-item-icon">{item.icon}</span>
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+        <button className={`tab-item${view==="settings"||view==="dissertation"||view==="flashcards"?" active":""}`} onClick={()=>setView(view==="settings"?"dashboard":"settings")}>
+          <span className="tab-item-icon">{view==="settings"||view==="dissertation"||view==="flashcards"?"✕":"⋯"}</span>
+          <span>More</span>
+        </button>
+      </nav>
 
       {/* ═══ RATE PROFESSOR MODAL ═══ */}
       {showRateModal&&(
