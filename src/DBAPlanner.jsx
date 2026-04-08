@@ -1029,21 +1029,117 @@ Return ONLY the JSON object, nothing else.`}
     setRmpResults(r=>({...r,[cid]:[]}));notify("RMP data applied — difficulty recalibrated!");
   }
 
-  // ── Calendar sync ────────────────────────────────────────────────────────────
+  // ── Calendar sync — client-side ICS generator ────────────────────────────────
+  function buildICS(){
+    const DAYS_SHORT_ICS={Sun:"SU",Mon:"MO",Tue:"TU",Wed:"WE",Thu:"TH",Fri:"FR",Sat:"SA"};
+    const esc=(s)=>String(s||"").replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\n/g,"\\n");
+    const icsDate=(d)=>d?d.replace(/-/g,""):"";
+    const icsTime=(d,t)=>{if(!d)return"";if(!t)return icsDate(d);const[h,m]=t.split(":");return`${d.replace(/-/g,"")}T${String(h).padStart(2,"0")}${String(m).padStart(2,"0")}00`;};
+    const stamp=()=>new Date().toISOString().replace(/[-:.]/g,"").slice(0,15)+"Z";
+    const fold=(line)=>{if(line.length<=75)return line;let out="",i=0;while(i<line.length){if(i===0){out+=line.slice(0,75);i=75;}else{out+="\r\n "+line.slice(i,i+74);i+=74;}}return out;};
+
+    const events=[];
+
+    // Class sessions (recurring)
+    courses.forEach(c=>{
+      if(!c.class_days?.length)return;
+      const byDay=c.class_days.map(d=>DAYS_SHORT_ICS[d]||d).join(",");
+      const dNums={SU:0,MO:1,TU:2,WE:3,TH:4,FR:5,SA:6};
+      const first=DAYS_SHORT_ICS[c.class_days[0]];
+      let d=new Date();d.setHours(0,0,0,0);
+      const target=dNums[first]??1;
+      while(d.getDay()!==target)d.setDate(d.getDate()+1);
+      const startDate=d.toISOString().slice(0,10);
+      const st=c.class_time||"09:00";
+      let et=c.class_end_time;
+      if(!et){const[sh,sm]=st.split(":").map(Number);let eh=sh+1,em=sm+30;if(em>=60){eh++;em-=60;}et=`${String(eh).padStart(2,"0")}:${String(em).padStart(2,"0")}`;}
+      const until=`${new Date().getFullYear()}1231T235959Z`;
+      events.push(["BEGIN:VEVENT",`UID:class-${c.id}@academicplan.pro`,`DTSTAMP:${stamp()}`,
+        `DTSTART;TZID=America/Chicago:${icsTime(startDate,st)}`,
+        `DTEND;TZID=America/Chicago:${icsTime(startDate,et)}`,
+        `RRULE:FREQ=WEEKLY;BYDAY=${byDay};UNTIL=${until}`,
+        `SUMMARY:🎓 ${esc(c.name)}`,
+        c.professor?`DESCRIPTION:Professor: ${esc(c.professor)}`:`DESCRIPTION:${esc(c.name)}`,
+        "CATEGORIES:CLASS","END:VEVENT"].join("\r\n"));
+    });
+
+    // Assignment due dates
+    assignments.forEach(a=>{
+      if(!a.due)return;
+      const c=courses.find(x=>x.id===a.courseId);
+      events.push(["BEGIN:VEVENT",`UID:due-${a.id}@academicplan.pro`,`DTSTAMP:${stamp()}`,
+        `DTSTART;VALUE=DATE:${icsDate(a.due)}`,`DTEND;VALUE=DATE:${icsDate(a.due)}`,
+        `SUMMARY:📌 ${esc(a.title)} — DUE`,
+        `DESCRIPTION:Course: ${esc(c?.name||"")}\\nType: ${esc(a.type||"")}`,
+        "CATEGORIES:ASSIGNMENT",a.done?"STATUS:COMPLETED":"STATUS:CONFIRMED",
+        "END:VEVENT"].join("\r\n"));
+    });
+
+    // Study blocks (from already-calculated studyBlocks)
+    studyBlocks.forEach(b=>{
+      const c=courses.find(x=>x.id===b.courseId);
+      events.push(["BEGIN:VEVENT",`UID:study-${b.id}@academicplan.pro`,`DTSTAMP:${stamp()}`,
+        `DTSTART;TZID=America/Chicago:${icsTime(b.date,b.startTime)}`,
+        `DTEND;TZID=America/Chicago:${icsTime(b.date,b.endTime)}`,
+        `SUMMARY:📚 Study: ${esc(b.title)}`,
+        `DESCRIPTION:Course: ${esc(c?.name||"")}`,
+        "CATEGORIES:STUDY","END:VEVENT"].join("\r\n"));
+    });
+
+    // Milestones
+    milestones.forEach(m=>{
+      if(!m.due)return;
+      events.push(["BEGIN:VEVENT",`UID:ms-${m.id}@academicplan.pro`,`DTSTAMP:${stamp()}`,
+        `DTSTART;VALUE=DATE:${icsDate(m.due)}`,`DTEND;VALUE=DATE:${icsDate(m.due)}`,
+        `SUMMARY:⬟ ${esc(m.title)}`,m.notes?`DESCRIPTION:${esc(m.notes)}`:"",
+        "CATEGORIES:MILESTONE",m.done?"STATUS:COMPLETED":"STATUS:CONFIRMED",
+        "END:VEVENT"].filter(Boolean).join("\r\n"));
+    });
+
+    // Travel/blackout dates
+    travelDates.forEach(tr=>{
+      const start=tr.start||tr.start_date;const end=tr.end||tr.end_date||start;
+      if(!start)return;
+      events.push(["BEGIN:VEVENT",`UID:travel-${tr.id}@academicplan.pro`,`DTSTAMP:${stamp()}`,
+        `DTSTART;VALUE=DATE:${icsDate(start)}`,`DTEND;VALUE=DATE:${icsDate(end)}`,
+        `SUMMARY:✈️ ${esc(tr.label||"Blackout")}`,
+        "CATEGORIES:TRAVEL","TRANSP:OPAQUE","END:VEVENT"].join("\r\n"));
+    });
+
+    const lines=[
+      "BEGIN:VCALENDAR","VERSION:2.0",
+      "PRODID:-//ProPlan Scholar//academicplan.pro//EN",
+      "CALSCALE:GREGORIAN","METHOD:PUBLISH",
+      "X-WR-CALNAME:ProPlan Scholar",
+      "X-WR-TIMEZONE:America/Chicago",
+      ...events,
+      "END:VCALENDAR"
+    ].map(fold).join("\r\n");
+
+    return lines;
+  }
+
+  function downloadICS(){
+    const ics=buildICS();
+    const blob=new Blob([ics],{type:"text/calendar;charset=utf-8"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;a.download="proplan-scholar.ics";
+    document.body.appendChild(a);a.click();
+    document.body.removeChild(a);URL.revokeObjectURL(url);
+    notify("Calendar file downloaded! Open it to add to your calendar app.");
+  }
+
+  // Keep token functions for future server-side use
   async function generateCalToken(){
-    // Create a random secure token for this user's calendar feed
     const token=Array.from(crypto.getRandomValues(new Uint8Array(24))).map(b=>b.toString(16).padStart(2,"0")).join("");
-    const{error}=await supabase.from("calendar_tokens").upsert({user_id:authUser.id,token,created_at:new Date().toISOString()},{onConflict:"user_id"});
-    if(!error){setCalToken(token);notify("Calendar link generated!");}
-    else notify("Error generating link — try again.");
+    await supabase.from("calendar_tokens").upsert({user_id:authUser.id,token,created_at:new Date().toISOString()},{onConflict:"user_id"}).catch(()=>{});
+    setCalToken(token);
   }
 
   function copyCalUrl(){
     const url=`https://academicplan.pro/api/calendar/${calToken}`;
-    navigator.clipboard.writeText(url).then(()=>{
-      setCalCopied(true);
-      setTimeout(()=>setCalCopied(false),2500);
-    });
+    navigator.clipboard.writeText(url).then(()=>{setCalCopied(true);setTimeout(()=>setCalCopied(false),2500);});
   }
 
   // ── Professor Ratings (community) ────────────────────────────────────────────
@@ -2169,35 +2265,29 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                       <span key={label} style={{fontSize:11,padding:"3px 9px",background:T.subcard,border:`1px solid ${T.border2}`,borderRadius:100,color:T.muted,display:"flex",alignItems:"center",gap:4}}>{icon} {label}</span>
                     ))}
                   </div>
-                  {calToken?(
-                    <div>
-                      <div style={{fontSize:11,color:T.muted,marginBottom:6}}>Your personal calendar URL:</div>
-                      <div style={{display:"flex",gap:7,marginBottom:12}}>
-                        <div style={{flex:1,background:T.subcard,border:`1px solid ${T.border2}`,borderRadius:8,padding:"8px 10px",fontSize:10,color:T.muted,fontFamily:"monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                          https://academicplan.pro/api/calendar/{calToken.slice(0,12)}…
-                        </div>
-                        <button className="bp" style={{fontSize:12,padding:"8px 14px",flexShrink:0,background:calCopied?T.success:T.accent,transition:"background .3s"}} onClick={copyCalUrl}>
-                          {calCopied?"✓ Copied!":"Copy Link"}
-                        </button>
-                      </div>
-                      <div style={{fontSize:11,fontWeight:600,color:T.text,marginBottom:7}}>How to add to your calendar:</div>
-                      {[
-                        {p:"🍎 iPhone / iPad",s:"Settings → Calendar → Accounts → Add Account → Other → Add Subscribed Calendar → paste URL"},
-                        {p:"🟢 Google Calendar",s:'Other calendars (+) → "From URL" → paste URL → Add Calendar'},
-                        {p:"🔵 Outlook",s:"Add Calendar → Subscribe from web → paste URL"},
-                      ].map(x=>(
-                        <div key={x.p} style={{padding:"8px 10px",background:T.subcard,borderRadius:8,border:`1px solid ${T.border}`,marginBottom:6}}>
-                          <div style={{fontWeight:600,fontSize:12,marginBottom:3}}>{x.p}</div>
-                          <div style={{fontSize:11,color:T.muted,lineHeight:1.5}}>{x.s}</div>
-                        </div>
-                      ))}
-                      <button className="bg2" style={{fontSize:11,marginTop:8,width:"100%"}} onClick={generateCalToken}>🔄 Reset Calendar Link</button>
+                  {/* Download button — works on ALL platforms, no server needed */}
+                  <button className="bp" style={{width:"100%",fontSize:13,marginBottom:12,padding:"12px"}} onClick={downloadICS}>
+                    ⬇️ Download Calendar File (.ics)
+                  </button>
+                  <div style={{padding:"10px 12px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`,marginBottom:12}}>
+                    <div style={{fontSize:12,fontWeight:600,marginBottom:6}}>🍎 iPhone — 3 steps:</div>
+                    <div style={{fontSize:11,color:T.muted,lineHeight:1.8}}>
+                      1. Tap the button above<br/>
+                      2. A prompt appears — tap <strong style={{color:T.text}}>"Add All"</strong><br/>
+                      3. Done! Open Calendar to see your schedule
                     </div>
-                  ):(
-                    <button className="bp" style={{width:"100%",fontSize:13}} onClick={generateCalToken}>
-                      Generate My Calendar Link
-                    </button>
-                  )}
+                    <div style={{fontSize:10,color:T.faint,marginTop:6}}>Re-download anytime to refresh with latest changes.</div>
+                  </div>
+                  {[
+                    {p:"🟢 Google Calendar",s:'Download the file → open calendar.google.com → Settings gear → Import & Export → Import'},
+                    {p:"🔵 Outlook",s:"Download the file → open Outlook → Add Calendar → Upload from file → select the .ics file"},
+                    {p:"🖥 Mac Calendar",s:"Download → double-click the .ics file → Calendar opens and asks to add events"},
+                  ].map(x=>(
+                    <div key={x.p} style={{padding:"7px 10px",background:T.subcard,borderRadius:8,border:`1px solid ${T.border}`,marginBottom:6}}>
+                      <div style={{fontWeight:600,fontSize:12,marginBottom:2}}>{x.p}</div>
+                      <div style={{fontSize:11,color:T.muted,lineHeight:1.5}}>{x.s}</div>
+                    </div>
+                  ))}
                 </div>
 
                 <div className="card">
