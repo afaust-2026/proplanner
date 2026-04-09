@@ -1573,6 +1573,8 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
   .stat-card{transition:transform .2s,box-shadow .2s;cursor:pointer;}
   @media(max-width:768px){
     .course-grid{grid-template-columns:1fr!important;}
+    .dash-grid{grid-template-columns:1fr!important;}
+    .settings-grid{grid-template-columns:1fr!important;}
   }
   .stat-card:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(${rgb},.15);}
   .stat-card:active{transform:scale(.97);}
@@ -1882,7 +1884,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                 )}
               </div>
 
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+              <div class="dash-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
                 <div className="card">
                   <div style={{fontSize:10,letterSpacing:2,color:T.accent,textTransform:"uppercase",marginBottom:9}}>Upcoming Deadlines</div>
                   {upcoming.length===0&&<div style={{color:T.faint,fontSize:13}}>All caught up! 🎉</div>}
@@ -2073,24 +2075,28 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                   {(()=>{const ps=course.professor?getProfStats(course.professor,uni.name):null;return ps&&<div style={{display:"flex",gap:8,marginBottom:5,fontSize:11,color:T.muted}}>⭐{ps.quality} Quality · 🔥{ps.difficulty} Difficulty · {ps.count} peer rating{ps.count>1?"s":""} <button onClick={()=>{setShowRateModal({courseId:course.id,profName:course.professor,courseName:course.name});setNewRating({quality:0,difficulty:0,workload:0,wouldTakeAgain:null,comment:""}); }} style={{background:"transparent",border:"none",color:T.accent,fontSize:11,cursor:"pointer",padding:0,fontFamily:"inherit"}}>+ Rate</button></div>})()}
                   {ca.sort((a,b)=>new Date(a.due)-new Date(b.due)).map(a=>{
                     const days=daysUntil(a.due);const sh=studyBlocks.filter(b=>b.assignId===a.id).length*2;const hasCards=a.flashcards?.length>0;
-                    return(<div key={a.id} style={{display:"flex",alignItems:"center",gap:9,padding:"9px 11px",background:dark?"#12121a":T.card,border:`1px solid ${T.border}`,borderRadius:8,marginBottom:4,opacity:a.done?0.5:1,transition:"opacity .2s"}}>
-                      <input type="checkbox" checked={a.done} onChange={()=>toggleDone(a.id)} style={{width:15,height:15,accentColor:course.color,cursor:"pointer"}}/>
-                      <div style={{flex:1}}>
-                        <div style={{fontWeight:600,textDecoration:a.done?"line-through":"none",fontSize:13}}>{a.title}</div>
-                        {a.topics&&<div style={{fontSize:11,color:T.muted,marginTop:2,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:320}}>{a.topics}</div>}
-                        <div style={{fontSize:10,color:T.muted,marginTop:2}}>
-                          <span className="tag" style={{background:course.color+"22",color:course.color,marginRight:6}}>{a.type}</span>
-                          Est. {a.estHours}h · {sh}h study
-                          {hasCards&&<span style={{marginLeft:7,color:"#a78bfa"}}>⬡ {a.flashcards.length} cards</span>}
+                    return(<div key={a.id} style={{padding:"11px 12px",background:dark?"#12121a":T.card,border:`1px solid ${T.border}`,borderRadius:10,marginBottom:6,opacity:a.done?0.5:1,transition:"opacity .2s"}}>
+                      {/* Top row: checkbox + title + urgency */}
+                      <div style={{display:"flex",alignItems:"flex-start",gap:9,marginBottom:a.topics?4:0}}>
+                        <input type="checkbox" checked={a.done} onChange={()=>toggleDone(a.id)} style={{width:16,height:16,accentColor:course.color,cursor:"pointer",marginTop:2,flexShrink:0}}/>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontWeight:600,textDecoration:a.done?"line-through":"none",fontSize:13,lineHeight:1.3}}>{a.title}</div>
+                          {a.topics&&<div style={{fontSize:11,color:T.muted,marginTop:2,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.topics}</div>}
+                        </div>
+                        <div style={{textAlign:"right",flexShrink:0}}>
+                          <div style={{fontSize:12,fontWeight:700,color:a.done?T.faint:urgencyColor(days,T)}}>{a.done?"Done":days<0?"Overdue":days===0?"Today!":`${days}d`}</div>
+                          <div style={{fontSize:10,color:T.faint}}>{a.due}</div>
                         </div>
                       </div>
-                      <div style={{display:"flex",alignItems:"center",gap:5}}>
-                        <button onClick={()=>{setShowFlashModal(a.id);setView("flashcards");}} style={{background:"transparent",border:`1px solid ${hasCards?"#a78bfa":T.border2}`,borderRadius:6,padding:"3px 7px",fontSize:11,color:hasCards?"#a78bfa":T.muted}}>{hasCards?"⬡ Cards":"⬡ Gen"}</button>
-                        <button onClick={()=>setEditAssign({...a})} style={{background:"transparent",border:`1px solid ${T.border2}`,borderRadius:6,padding:"3px 7px",fontSize:11,color:T.muted}}>✏️</button>
-                        <button className="del-btn" onClick={()=>deleteAssignment(a.id)}>🗑</button>
-                        <div style={{textAlign:"right"}}>
-                          <div style={{fontSize:11,fontWeight:700,color:a.done?T.faint:urgencyColor(days,T)}}>{a.done?"Done":days<0?"Overdue":days===0?"Today!":`${days}d`}</div>
-                          <div style={{fontSize:10,color:T.faint}}>{a.due}</div>
+                      {/* Bottom row: type tag + action buttons */}
+                      <div style={{display:"flex",alignItems:"center",gap:6,marginTop:7,paddingTop:6,borderTop:`1px solid ${T.border}`,flexWrap:"wrap"}}>
+                        <span className="tag" style={{background:course.color+"22",color:course.color}}>{a.type}</span>
+                        <span style={{fontSize:10,color:T.muted}}>Est. {a.estHours}h · {sh}h study</span>
+                        {hasCards&&<span style={{fontSize:10,color:"#a78bfa"}}>⬡ {a.flashcards.length} cards</span>}
+                        <div style={{marginLeft:"auto",display:"flex",gap:5,flexShrink:0}}>
+                          <button onClick={()=>{setShowFlashModal(a.id);setView("flashcards");}} style={{background:"transparent",border:`1px solid ${hasCards?"#a78bfa":T.border2}`,borderRadius:7,padding:"5px 9px",fontSize:11,color:hasCards?"#a78bfa":T.muted,minHeight:30}}>{hasCards?"⬡ Cards":"⬡ Gen"}</button>
+                          <button onClick={()=>setEditAssign({...a})} style={{background:"transparent",border:`1px solid ${T.border2}`,borderRadius:7,padding:"5px 9px",fontSize:11,color:T.muted,minHeight:30}}>✏️</button>
+                          <button className="del-btn" style={{padding:"5px 9px",minHeight:30}} onClick={()=>deleteAssignment(a.id)}>🗑</button>
                         </div>
                       </div>
                     </div>);
@@ -2258,7 +2264,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
           {view==="schedule"&&(
             <div className="fi">
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:13}}>
-                <div><div style={{fontSize:10,letterSpacing:3,color:T.accent,textTransform:"uppercase"}}>Time Blocks</div><h1 style={{fontSize:22,fontWeight:700}}>My Schedule</h1></div>
+                <div><div style={{fontSize:10,letterSpacing:3,color:T.accent,textTransform:"uppercase"}}>Time Blocks</div><h1 style={{fontSize:22,fontWeight:700,whiteSpace:"nowrap"}}>My Schedule</h1></div>
                 <button className="bp" onClick={()=>setShowAddBlock(true)}>+ Add Block</button>
               </div>
               <div style={{fontSize:12,color:T.muted,marginBottom:12,padding:"10px 14px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`}}>
