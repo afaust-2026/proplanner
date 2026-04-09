@@ -1571,10 +1571,27 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
 
   /* ── Stat cards ───────────────────────────────────────── */
   .stat-card{transition:transform .2s,box-shadow .2s;cursor:pointer;}
+  /* ── Calendar grid ───────────────────────────────── */
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+  .cal-day{min-height:54px;padding:4px;border-radius:8px;cursor:pointer;transition:all .15s;}
+  .cal-header{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:3px;}
+  .cal-header-cell{text-align:center;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:2px 0;}
+  .cal-pill{font-size:8px;padding:1px 4px;border-radius:3px;margin-bottom:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;}
+
   @media(max-width:768px){
     .course-grid{grid-template-columns:1fr!important;}
     .dash-grid{grid-template-columns:1fr!important;}
     .settings-grid{grid-template-columns:1fr!important;}
+    /* Calendar: tighter cells on mobile */
+    .cal-day{min-height:44px!important;padding:2px!important;border-radius:5px!important;}
+    .cal-pill{font-size:7px!important;padding:1px 2px!important;}
+    .cal-header-cell{font-size:8px!important;letter-spacing:0!important;}
+    /* Work schedule: scroll horizontally */
+    .work-sched-grid{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px;}
+    .work-sched-inner{display:grid;grid-template-columns:repeat(7,minmax(80px,1fr));gap:8px;min-width:560px;}
+  }
+  @media(min-width:769px){
+    .work-sched-inner{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;}
   }
   .stat-card:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(${rgb},.15);}
   .stat-card:active{transform:scale(.97);}
@@ -1969,22 +1986,22 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                 <span><span style={{display:"inline-block",width:8,height:8,borderRadius:2,background:T.caution,marginRight:4}}/>Travel</span>
                 <span><span style={{display:"inline-block",width:8,height:8,borderRadius:2,background:"#10b981",marginRight:4}}/>Class</span>
               </div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:3}}>
-                {DAYS_SHORT.map(d=><div key={d} style={{textAlign:"center",fontSize:10,color:T.faint,letterSpacing:1,textTransform:"uppercase",padding:"2px 0"}}>{d}</div>)}
+              <div className="cal-header">
+                {DAYS_SHORT.map(d=><div key={d} className="cal-header-cell" style={{color:T.faint}}>{d.slice(0,1)}</div>)}
               </div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
+              <div className="cal-grid">
                 {calDays.map((day,i)=>{
                   if(!day)return<div key={i}/>;
                   const{asgn,study,travel,milestone,blocks,classes}=getEventsForDay(calYear,calMonth,day);
                   const isToday=calYear===t.year&&calMonth===t.month&&day===t.day;
                   const isSel=selectedDay===day;
                   return(
-                    <div key={i} onClick={()=>setSelectedDay(isSel?null:day)} style={{minHeight:54,padding:4,borderRadius:8,cursor:"pointer",background:travel?(dark?"#1a1510":"#fff8ee"):isSel?(dark?"#1e1e35":"#ebebff"):isToday?(dark?"#16162a":"#f0f0ff"):(dark?"#12121a":T.card),border:`1px solid ${isToday?T.accent:T.border}`,transition:"all .15s"}}>
+                    <div key={i} onClick={()=>setSelectedDay(isSel?null:day)} className="cal-day" style={{background:travel?(dark?"#1a1510":"#fff8ee"):isSel?(dark?"#1e1e35":"#ebebff"):isToday?(dark?"#16162a":"#f0f0ff"):(dark?"#12121a":T.card),border:`1px solid ${isToday?T.accent:T.border}`}}>
                       <div style={{fontSize:11,fontWeight:isToday?700:400,color:isToday?T.accent:T.text,marginBottom:2}}>{day}{travel&&" ✈"}</div>
-                      {classes.map(c=><div key={c.id} style={{fontSize:8,padding:"1px 4px",borderRadius:3,background:"rgba(16,185,129,.2)",color:"#10b981",marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600}}>🎓 {c.name.length>10?c.name.slice(0,10)+"…":c.name}{c.class_time&&" "+to12h(c.class_time)}</div>)}
-                      {asgn.map(a=>{const col=courses.find(c=>c.id===a.courseId)?.color||T.accent;return(<div key={a.id} style={{fontSize:8,padding:"1px 4px",borderRadius:3,background:`rgba(${hexToRgb(col)},.2)`,color:col,marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>📌 {a.title.length>10?a.title.slice(0,10)+"…":a.title}</div>);})}
-                      {study.slice(0,2).map(b=>{const done=completedStudy[b.id];const bCourse=courses.find(c=>c.id===b.courseId);return(<div key={b.id} style={{fontSize:8,padding:"1px 4px",borderRadius:3,background:done?`rgba(${hexToRgb(bCourse?.color||"34,197,94")},.15)`:`rgba(${hexToRgb(bCourse?.color||"14,165,233")},.2)`,color:done?"#22c55e":bCourse?.color||"#38bdf8",marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textDecoration:done?"line-through":"none",fontWeight:500}}>📚 {to12h(b.startTime)} {(b.title||"Study").length>10?(b.title||"Study").slice(0,10)+"…":(b.title||"Study")}</div>);})}
-                      {milestone&&<div style={{fontSize:8,padding:"1px 4px",borderRadius:3,background:"rgba(167,139,250,.2)",color:"#a78bfa",marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>⬟ {milestone.title.length>10?milestone.title.slice(0,10)+"…":milestone.title}</div>}
+                      {classes.map(c=><div key={c.id} className="cal-pill" style={{background:"rgba(16,185,129,.2)",color:"#10b981"}}>🎓 {c.name.length>8?c.name.slice(0,8)+"…":c.name}</div>)}
+                      {asgn.map(a=>{const col=courses.find(c=>c.id===a.courseId)?.color||T.accent;return(<div key={a.id} className="cal-pill" style={{background:`rgba(${hexToRgb(col)},.2)`,color:col}}>📌 {a.title.length>8?a.title.slice(0,8)+"…":a.title}</div>);})}
+                      {study.slice(0,2).map(b=>{const done=completedStudy[b.id];const bCourse=courses.find(c=>c.id===b.courseId);return(<div key={b.id} className="cal-pill" style={{background:done?`rgba(${hexToRgb(bCourse?.color||"34,197,94")},.15)`:`rgba(${hexToRgb(bCourse?.color||"14,165,233")},.2)`,color:done?"#22c55e":bCourse?.color||"#38bdf8",textDecoration:done?"line-through":"none"}}>📚 {to12h(b.startTime)}</div>);})}
+                      {milestone&&<div className="cal-pill" style={{background:"rgba(167,139,250,.2)",color:"#a78bfa"}}>⬟ {milestone.title.length>6?milestone.title.slice(0,6)+"…":milestone.title}</div>}
                       {study.length>2&&<div style={{fontSize:7,color:T.faint}}>+{study.length-2} more</div>}
                     </div>
                   );
@@ -2276,22 +2293,24 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                 <div className="card" style={{marginBottom:12}}>
                   <div style={{fontWeight:700,marginBottom:4}}>💼 Work Schedule</div>
                   <div style={{fontSize:12,color:T.muted,marginBottom:10}}>Toggle each day independently and set your exact work hours.</div>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:5}}>
+                  <div className="work-sched-grid">
+                    <div className="work-sched-inner">
                     {DAYS_SHORT.map(day=>{const s=workSched[day];return(
-                      <div key={day} style={{display:"flex",flexDirection:"column",gap:4,padding:"8px 5px",background:T.subcard,borderRadius:7,border:`1px solid ${s.work?T.accent:T.border2}`,transition:"border-color .2s"}}>
+                      <div key={day} style={{display:"flex",flexDirection:"column",gap:6,padding:"10px 8px",background:T.subcard,borderRadius:10,border:`1px solid ${s.work?T.accent:T.border2}`,transition:"border-color .2s"}}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                          <span style={{fontSize:10,fontWeight:700,color:s.work?T.accent:T.faint}}>{day}</span>
-                          <button onClick={()=>setWorkSched(p=>({...p,[day]:{...p[day],work:!p[day].work}}))} style={{width:24,height:13,borderRadius:20,background:s.work?T.accent:T.border2,border:"none",position:"relative",cursor:"pointer",transition:"background .2s"}}>
-                            <div style={{position:"absolute",top:1,left:s.work?11:1,width:11,height:11,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
+                          <span style={{fontSize:11,fontWeight:700,color:s.work?T.accent:T.faint}}>{day}</span>
+                          <button onClick={()=>setWorkSched(p=>({...p,[day]:{...p[day],work:!p[day].work}}))} style={{width:28,height:16,borderRadius:20,background:s.work?T.accent:T.border2,border:"none",position:"relative",cursor:"pointer",transition:"background .2s",flexShrink:0}}>
+                            <div style={{position:"absolute",top:2,left:s.work?13:2,width:12,height:12,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
                           </button>
                         </div>
                         {s.work&&(<>
-                          <input type="time" className="ifield" value={s.start} onChange={e=>setWorkSched(p=>({...p,[day]:{...p[day],start:e.target.value}}))} style={{fontSize:9,padding:"2px 4px",textAlign:"center"}}/>
-                          <input type="time" className="ifield" value={s.end} onChange={e=>setWorkSched(p=>({...p,[day]:{...p[day],end:e.target.value}}))} style={{fontSize:9,padding:"2px 4px",textAlign:"center"}}/>
+                          <input type="time" className="ifield" value={s.start} onChange={e=>setWorkSched(p=>({...p,[day]:{...p[day],start:e.target.value}}))} style={{fontSize:12,padding:"6px 4px",textAlign:"center"}}/>
+                          <input type="time" className="ifield" value={s.end} onChange={e=>setWorkSched(p=>({...p,[day]:{...p[day],end:e.target.value}}))} style={{fontSize:12,padding:"6px 4px",textAlign:"center"}}/>
                         </>)}
-                        {!s.work&&<div style={{fontSize:9,color:T.faint,textAlign:"center"}}>Free</div>}
+                        {!s.work&&<div style={{fontSize:11,color:T.faint,textAlign:"center",paddingTop:4}}>Free</div>}
                       </div>
                     );})}
+                    </div>
                   </div>
                   <button className="bp" style={{marginTop:11,fontSize:12}} onClick={()=>{generateStudyBlocks();notify("Work schedule saved — study blocks recalculated!");}}>Save & Recalculate</button>
                 </div>
