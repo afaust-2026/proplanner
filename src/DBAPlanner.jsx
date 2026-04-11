@@ -2729,26 +2729,27 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                     <div>
                       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
                         <span style={{fontSize:20}}>📧</span>
-                        <div>
-                          <div style={{fontWeight:600,fontSize:13}}>Email Reminders</div>
-                          <span style={{fontSize:9,background:`rgba(${rgb},.15)`,color:T.accent,padding:"1px 6px",borderRadius:8,fontWeight:600,letterSpacing:.5}}>COMING IN V2</span>
-                        </div>
+                        <div style={{flex:1}}><div style={{fontWeight:600,fontSize:13}}>Weekly Digest Email</div><div style={{fontSize:11,color:T.success,fontWeight:600}}>✓ Available now</div></div>
+                        {/* Toggle */}
+                        <button onClick={async()=>{const val=profile?.email_digest!==false?false:true;setProfile(p=>({...p,email_digest:val}));await supabase.from("profiles").update({email_digest:val}).eq("id",authUser.id);notify(val?"Weekly digest enabled!":"Weekly digest disabled.");}} style={{width:44,height:24,borderRadius:20,background:profile?.email_digest!==false?T.success:T.border2,border:"none",position:"relative",cursor:"pointer",transition:"background .2s",flexShrink:0}}>
+                          <div style={{position:"absolute",top:2,left:profile?.email_digest!==false?21:2,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,.2)"}}/>
+                        </button>
                       </div>
-                      <div style={{fontSize:12,color:T.muted,lineHeight:1.7,marginBottom:12}}>Receive weekly schedule summaries and deadline reminders at your university email. We'll use the email address you signed up with.</div>
-                      <div style={{padding:"10px 12px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`,marginBottom:10}}>
-                        <div style={{fontSize:11,fontWeight:600,marginBottom:4}}>Your notification email</div>
-                        <div style={{fontSize:13,color:T.text,fontWeight:600,padding:"6px 0"}}>{authUser?.email}</div>
-                        <div style={{fontSize:10,color:T.muted}}>Update your email in account settings if needed.</div>
+                      <div style={{padding:"10px 12px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`,marginBottom:12}}>
+                        <div style={{fontSize:11,fontWeight:600,marginBottom:4}}>Sending to</div>
+                        <div style={{fontSize:13,color:T.text,fontWeight:600}}>{authUser?.email}</div>
+                        <div style={{fontSize:10,color:T.muted,marginTop:2}}>Every Sunday at 6 PM CT</div>
                       </div>
-                      <div style={{padding:"10px 12px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`}}>
-                        <div style={{fontSize:11,fontWeight:600,marginBottom:6}}>When email reminders launch:</div>
-                        {[["Sunday evening","Your full week ahead — classes, study blocks, deadlines"],["48h before","Upcoming assignment reminder"],["Weekly","Progress summary and wellness check"]].map(([t,d])=>(
-                          <div key={t} style={{display:"flex",gap:8,padding:"4px 0",borderBottom:`1px solid ${T.border}`,alignItems:"flex-start"}}>
-                            <span style={{fontSize:10,fontWeight:700,color:T.accent,minWidth:90,flexShrink:0,paddingTop:1}}>{t}</span>
-                            <span style={{fontSize:11,color:T.muted}}>{d}</span>
+                      <div style={{padding:"10px 12px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`,marginBottom:12}}>
+                        <div style={{fontSize:11,fontWeight:600,marginBottom:8}}>Each email includes:</div>
+                        {[["📊","At-a-glance stats","Courses, pending, study hours, completed"],["⚠️","Overdue alerts","Any past-due assignments flagged immediately"],["📌","Upcoming deadlines","Next 14 days sorted by urgency"],["📚","Study schedule","This week's sessions with exact times"],["⬟","Next milestone","Your dissertation or major project progress"]].map(([icon,t,d])=>(
+                          <div key={t} style={{display:"flex",gap:10,padding:"5px 0",borderBottom:`1px solid ${T.border}`,alignItems:"flex-start"}}>
+                            <span style={{fontSize:14,flexShrink:0}}>{icon}</span>
+                            <div><div style={{fontSize:12,fontWeight:600}}>{t}</div><div style={{fontSize:10,color:T.muted}}>{d}</div></div>
                           </div>
                         ))}
                       </div>
+                      <div style={{fontSize:11,color:T.faint,textAlign:"center"}}>You can unsubscribe at any time from the email or by toggling above.</div>
                     </div>
                   )}
                 </div>
