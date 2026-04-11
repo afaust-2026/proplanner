@@ -8,5 +8,11 @@
     { "src": "/(.*)\\.js", "dest": "/$1.js" },
     { "src": "/(.*)\\.css", "dest": "/$1.css" },
     { "src": "/", "dest": "/landing.html" }
+  ],
+  "crons": [
+    {
+      "path": "/api/digest/send",
+      "schedule": "0 23 * * 0"
+    }
   ]
 }
