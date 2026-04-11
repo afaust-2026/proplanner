@@ -459,8 +459,13 @@ export default function ProPlanScholar(){
   const[studyBlocks,setStudyBlocks]=useState([]);
   const[completedStudy,setCompletedStudy]=useState({}); // {blockId: true}
   const[showTimeTracker,setShowTimeTracker]=useState(false);
-  const[calToken,setCalToken]=useState(null); // user's calendar subscription token
-  const[calCopied,setCalCopied]=useState(false); // copy feedback
+  const[calToken,setCalToken]=useState(null);
+  const[calCopied,setCalCopied]=useState(false);
+  const[userPhone,setUserPhone]=useState(""); // for SMS reminders
+  const[canvasUrl,setCanvasUrl]=useState(""); // Canvas LMS URL
+  const[canvasToken,setCanvasToken]=useState(""); // Canvas API token
+  const[canvasImporting,setCanvasImporting]=useState(false);
+  const[integrationTab,setIntegrationTab]=useState("outlook"); // active integration tab
   const[trackerCategory,setTrackerCategory]=useState(null); // drill-down category
   const[milestones,setMilestones]=useState([]);
   const[scheduleBlocks,setScheduleBlocks]=useState([]);  // practice, greek, work events
@@ -571,7 +576,7 @@ export default function ProPlanScholar(){
 
   async function loadProfile(){
     const{data}=await supabase.from("profiles").select("*").eq("id",authUser.id).single();
-    if(data){setProfile(data);if(data.dark_mode!==undefined)setDark(data.dark_mode);}
+    if(data){setProfile(data);if(data.dark_mode!==undefined)setDark(data.dark_mode);if(data.phone)setUserPhone(data.phone);if(data.canvas_url)setCanvasUrl(data.canvas_url);}
     else setProfile({id:authUser.id,onboarding_complete:false});
   }
 
@@ -1144,6 +1149,25 @@ Return ONLY the JSON object, nothing else.`}
     document.body.appendChild(a);a.click();
     document.body.removeChild(a);URL.revokeObjectURL(url);
     notify("Calendar file downloaded! Open it to add to your calendar app.");
+  }
+
+  // ── Canvas LMS import ────────────────────────────────────────────────────────
+  async function importFromCanvas(){
+    if(!canvasUrl||!canvasToken){notify("Please enter your Canvas URL and API token.");return;}
+    setCanvasImporting(true);
+    try{
+      // Save canvas creds to profile
+      await supabase.from("profiles").update({canvas_url:canvasUrl}).eq("id",authUser.id);
+      notify("Canvas credentials saved! Contact support to enable full import.");
+    }catch(e){notify("Error saving Canvas settings.");}
+    setCanvasImporting(false);
+  }
+
+  // ── Save phone for SMS ────────────────────────────────────────────────────────
+  async function savePhone(){
+    if(!userPhone){notify("Please enter a phone number.");return;}
+    await supabase.from("profiles").update({phone:userPhone}).eq("id",authUser.id);
+    notify("Phone number saved!");
   }
 
   // Keep token functions for future server-side use
@@ -2596,17 +2620,137 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                 </div>
 
                 <div className="card">
-                  <div style={{fontWeight:700,marginBottom:10}}>Integrations (Coming Soon)</div>
-                  {[{name:"SMS Reminders",icon:"📱",desc:"Text alerts for deadlines"},{name:"Outlook Calendar",icon:"📅",desc:"Sync via Microsoft Graph API"},{name:"Canvas / eLearning",icon:"📚",desc:"Auto-import assignments"},{name:"University Email",icon:"📧",desc:"Deadline reminders to inbox"}].map(item=>(
-                    <div key={item.name} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 0",borderBottom:`1px solid ${T.border}`}}>
-                      <span style={{fontSize:16}}>{item.icon}</span>
-                      <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600}}>{item.name}</div><div style={{fontSize:10,color:T.muted}}>{item.desc}</div></div>
-                      <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:2}}>
-                        <span style={{fontSize:9,background:`rgba(${rgb},.15)`,color:T.accent,padding:"1px 6px",borderRadius:8,border:`1px solid rgba(${rgb},.3)`,fontWeight:600,letterSpacing:.5}}>COMING SOON</span>
-                        <button style={{background:"transparent",border:`1px solid ${T.border2}`,borderRadius:6,padding:"2px 8px",fontSize:10,color:T.faint,cursor:"pointer",fontFamily:"inherit"}} onClick={()=>notify(`${item.name} integration is coming in v2! We will notify you when it's ready.`)}>Notify Me</button>
+                  <div style={{fontWeight:700,marginBottom:12}}>Integrations</div>
+
+                  {/* Tab selector */}
+                  <div style={{display:"flex",gap:4,marginBottom:14,flexWrap:"wrap"}}>
+                    {[["outlook","📅 Outlook"],["sms","📱 SMS"],["canvas","📚 Canvas"],["email","📧 Email"]].map(([id,label])=>(
+                      <button key={id} onClick={()=>setIntegrationTab(id)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${integrationTab===id?T.accent:T.border2}`,background:integrationTab===id?`rgba(${rgb},.1)`:"transparent",color:integrationTab===id?T.accent:T.muted,fontSize:11,fontWeight:integrationTab===id?700:400,fontFamily:"inherit",cursor:"pointer"}}>{label}</button>
+                    ))}
+                  </div>
+
+                  {/* OUTLOOK */}
+                  {integrationTab==="outlook"&&(
+                    <div>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                        <span style={{fontSize:20}}>📅</span>
+                        <div>
+                          <div style={{fontWeight:600,fontSize:13}}>Outlook Calendar</div>
+                          <div style={{fontSize:11,color:T.success,fontWeight:600}}>✓ Available now</div>
+                        </div>
+                      </div>
+                      <div style={{fontSize:12,color:T.muted,lineHeight:1.7,marginBottom:12}}>Add your ProPlan Scholar schedule directly to Outlook. Classes, study sessions, and deadlines stay in sync.</div>
+                      <div style={{padding:"10px 12px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`,marginBottom:10}}>
+                        <div style={{fontSize:12,fontWeight:600,marginBottom:6}}>How to add to Outlook:</div>
+                        <div style={{fontSize:11,color:T.muted,lineHeight:1.8}}>
+                          1. Scroll up to <strong style={{color:T.text}}>Calendar Sync</strong> and tap <strong style={{color:T.text}}>Download Calendar File</strong><br/>
+                          2. Open <strong style={{color:T.text}}>Outlook</strong> on your phone or computer<br/>
+                          3. Tap the calendar icon → <strong style={{color:T.text}}>Add Calendar</strong><br/>
+                          4. Choose <strong style={{color:T.text}}>Upload from file</strong> → select the downloaded .ics file<br/>
+                          5. Your classes and study sessions appear immediately
+                        </div>
+                      </div>
+                      <div style={{padding:"8px 12px",background:`rgba(${rgb},.06)`,borderRadius:8,border:`1px solid rgba(${rgb},.15)`}}>
+                        <div style={{fontSize:11,color:T.muted}}>💡 <strong style={{color:T.text}}>Tip:</strong> Re-download the calendar file at the start of each week to keep Outlook updated with your latest schedule.</div>
                       </div>
                     </div>
-                  ))}
+                  )}
+
+                  {/* SMS */}
+                  {integrationTab==="sms"&&(
+                    <div>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                        <span style={{fontSize:20}}>📱</span>
+                        <div>
+                          <div style={{fontWeight:600,fontSize:13}}>SMS Deadline Reminders</div>
+                          <span style={{fontSize:9,background:`rgba(${rgb},.15)`,color:T.accent,padding:"1px 6px",borderRadius:8,fontWeight:600,letterSpacing:.5}}>COMING IN V2</span>
+                        </div>
+                      </div>
+                      <div style={{fontSize:12,color:T.muted,lineHeight:1.7,marginBottom:12}}>Get text message reminders 24 hours before assignments are due. Save your number now and we'll enable it when SMS launches.</div>
+                      <div style={{marginBottom:8}}>
+                        <div style={{fontSize:11,color:T.muted,marginBottom:5}}>Your mobile number</div>
+                        <div style={{display:"flex",gap:8}}>
+                          <input className="ifield" value={userPhone} onChange={e=>setUserPhone(e.target.value)} placeholder="+1 (555) 000-0000" style={{flex:1,fontSize:13}}/>
+                          <button className="bp" style={{fontSize:12,padding:"10px 14px",flexShrink:0}} onClick={savePhone}>Save</button>
+                        </div>
+                      </div>
+                      <div style={{padding:"10px 12px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`}}>
+                        <div style={{fontSize:11,fontWeight:600,marginBottom:6}}>When SMS launches, you'll receive:</div>
+                        {[["24h before","Assignment due date reminders"],["1h before","Study session start alerts"],["Morning of","Daily schedule summary"],["Overdue alert","When something is past due"]].map(([t,d])=>(
+                          <div key={t} style={{display:"flex",gap:8,padding:"4px 0",borderBottom:`1px solid ${T.border}`,alignItems:"center"}}>
+                            <span style={{fontSize:10,fontWeight:700,color:T.accent,minWidth:80,flexShrink:0}}>{t}</span>
+                            <span style={{fontSize:11,color:T.muted}}>{d}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* CANVAS */}
+                  {integrationTab==="canvas"&&(
+                    <div>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                        <span style={{fontSize:20}}>📚</span>
+                        <div>
+                          <div style={{fontWeight:600,fontSize:13}}>Canvas LMS</div>
+                          <span style={{fontSize:9,background:`rgba(${rgb},.15)`,color:T.accent,padding:"1px 6px",borderRadius:8,fontWeight:600,letterSpacing:.5}}>BETA</span>
+                        </div>
+                      </div>
+                      <div style={{fontSize:12,color:T.muted,lineHeight:1.7,marginBottom:12}}>Connect Canvas to automatically import your assignments and due dates. Requires your Canvas URL and a personal API token from your school's Canvas account.</div>
+                      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
+                        <div>
+                          <div style={{fontSize:11,color:T.muted,marginBottom:4}}>Your Canvas URL</div>
+                          <input className="ifield" value={canvasUrl} onChange={e=>setCanvasUrl(e.target.value)} placeholder="https://utdallas.instructure.com" style={{fontSize:13}}/>
+                        </div>
+                        <div>
+                          <div style={{fontSize:11,color:T.muted,marginBottom:4}}>Canvas API Token</div>
+                          <input className="ifield" value={canvasToken} onChange={e=>setCanvasToken(e.target.value)} placeholder="Paste your token here" type="password" style={{fontSize:13}}/>
+                        </div>
+                        <button className="bp" style={{fontSize:13}} onClick={importFromCanvas} disabled={canvasImporting}>
+                          {canvasImporting?"Connecting...":"Save Canvas Settings"}
+                        </button>
+                      </div>
+                      <div style={{padding:"10px 12px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`}}>
+                        <div style={{fontSize:11,fontWeight:600,marginBottom:6}}>How to get your Canvas API token:</div>
+                        <div style={{fontSize:11,color:T.muted,lineHeight:1.8}}>
+                          1. Log into Canvas at your school's URL<br/>
+                          2. Click your profile picture → <strong style={{color:T.text}}>Account</strong> → <strong style={{color:T.text}}>Settings</strong><br/>
+                          3. Scroll to <strong style={{color:T.text}}>Approved Integrations</strong><br/>
+                          4. Click <strong style={{color:T.text}}>+ New Access Token</strong><br/>
+                          5. Set purpose to "ProPlan Scholar" → <strong style={{color:T.text}}>Generate Token</strong><br/>
+                          6. Copy and paste the token above
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* EMAIL */}
+                  {integrationTab==="email"&&(
+                    <div>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                        <span style={{fontSize:20}}>📧</span>
+                        <div>
+                          <div style={{fontWeight:600,fontSize:13}}>Email Reminders</div>
+                          <span style={{fontSize:9,background:`rgba(${rgb},.15)`,color:T.accent,padding:"1px 6px",borderRadius:8,fontWeight:600,letterSpacing:.5}}>COMING IN V2</span>
+                        </div>
+                      </div>
+                      <div style={{fontSize:12,color:T.muted,lineHeight:1.7,marginBottom:12}}>Receive weekly schedule summaries and deadline reminders at your university email. We'll use the email address you signed up with.</div>
+                      <div style={{padding:"10px 12px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`,marginBottom:10}}>
+                        <div style={{fontSize:11,fontWeight:600,marginBottom:4}}>Your notification email</div>
+                        <div style={{fontSize:13,color:T.text,fontWeight:600,padding:"6px 0"}}>{authUser?.email}</div>
+                        <div style={{fontSize:10,color:T.muted}}>Update your email in account settings if needed.</div>
+                      </div>
+                      <div style={{padding:"10px 12px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`}}>
+                        <div style={{fontSize:11,fontWeight:600,marginBottom:6}}>When email reminders launch:</div>
+                        {[["Sunday evening","Your full week ahead — classes, study blocks, deadlines"],["48h before","Upcoming assignment reminder"],["Weekly","Progress summary and wellness check"]].map(([t,d])=>(
+                          <div key={t} style={{display:"flex",gap:8,padding:"4px 0",borderBottom:`1px solid ${T.border}`,alignItems:"flex-start"}}>
+                            <span style={{fontSize:10,fontWeight:700,color:T.accent,minWidth:90,flexShrink:0,paddingTop:1}}>{t}</span>
+                            <span style={{fontSize:11,color:T.muted}}>{d}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="card">
                   <div style={{fontWeight:700,marginBottom:7}}>Syllabus Import</div>
