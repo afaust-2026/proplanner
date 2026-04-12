@@ -1,94 +1,27 @@
 // api/digest/unsubscribe.js
-// One-click unsubscribe from weekly digest emails
-// URL: academicplan.pro/api/digest/unsubscribe?uid=USER_ID
-
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || '';
 
 export default async function handler(req, res) {
   const { uid } = req.query;
-
-  if (!uid) {
-    return res.status(400).send(errorPage('Invalid unsubscribe link', 'This unsubscribe link is missing required information. Please open ProPlan Scholar and turn off email digests in Settings.'));
-  }
-
+  if (!uid) return res.status(400).send(errorPage('Invalid link', 'This unsubscribe link is missing required information. Please open ProPlan Scholar and turn off email digests in Settings.'));
   try {
-    // Update the profile to opt out
     const updateRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${uid}`, {
       method: 'PATCH',
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
-        'Content-Type': 'application/json',
-        'Prefer': 'return=minimal',
-      },
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify({ email_digest: false }),
     });
-
-    if (!updateRes.ok) {
-      throw new Error('Database update failed');
-    }
-
+    if (!updateRes.ok) throw new Error('Database update failed');
     return res.status(200).send(successPage());
-
-  } catch (err) {
-    console.error('Unsubscribe error:', err);
-    return res.status(500).send(errorPage('Something went wrong', 'We were unable to process your unsubscribe request. Please open ProPlan Scholar and turn off email digests in Settings → Email Reminders.'));
+  } catch(err) {
+    return res.status(500).send(errorPage('Something went wrong', 'We could not process your request. Please open ProPlan Scholar and turn off email digests in Settings.'));
   }
 }
 
 function successPage() {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>Unsubscribed — ProPlan Scholar</title>
-  <style>
-    body{margin:0;padding:0;background:#f0ece3;font-family:'Helvetica Neue',Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;}
-    .card{background:#fff;border-radius:20px;padding:48px 40px;max-width:420px;width:calc(100% - 48px);text-align:center;box-shadow:0 4px 32px rgba(0,0,0,.08);}
-    .icon{font-size:48px;margin-bottom:16px;}
-    h1{font-size:22px;font-weight:700;color:#0e0e14;margin:0 0 10px;}
-    p{font-size:14px;color:#6b6560;line-height:1.6;margin:0 0 24px;}
-    a{display:inline-block;background:#c75b12;color:#fff;text-decoration:none;padding:12px 28px;border-radius:100px;font-size:14px;font-weight:600;}
-    .note{font-size:12px;color:#9a97a8;margin-top:16px;}
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="icon">✅</div>
-    <h1>You've been unsubscribed</h1>
-    <p>You'll no longer receive weekly digest emails from ProPlan Scholar. You can re-enable them anytime in Settings → Email Reminders.</p>
-    <a href="https://academicplan.pro/app">Back to ProPlan Scholar</a>
-    <p class="note">Your account and all your academic data are still safe and intact.</p>
-  </div>
-</body>
-</html>`;
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>Unsubscribed — ProPlan Scholar</title><style>body{margin:0;background:#f0ece3;font-family:'Helvetica Neue',Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;}.card{background:#fff;border-radius:20px;padding:48px 40px;max-width:420px;width:calc(100% - 48px);text-align:center;box-shadow:0 4px 32px rgba(0,0,0,.08);}h1{font-size:22px;font-weight:700;color:#0e0e14;margin:0 0 10px;}p{font-size:14px;color:#6b6560;line-height:1.6;margin:0 0 24px;}a{display:inline-block;background:#c75b12;color:#fff;text-decoration:none;padding:12px 28px;border-radius:100px;font-size:14px;font-weight:600;}</style></head><body><div class="card"><div style="font-size:48px;margin-bottom:16px;">✅</div><h1>You've been unsubscribed</h1><p>You'll no longer receive weekly digest emails. You can re-enable them in Settings → Integrations → Email.</p><a href="https://academicplan.pro/app">Back to ProPlan Scholar</a></div></body></html>`;
 }
 
 function errorPage(title, message) {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>Error — ProPlan Scholar</title>
-  <style>
-    body{margin:0;padding:0;background:#f0ece3;font-family:'Helvetica Neue',Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;}
-    .card{background:#fff;border-radius:20px;padding:48px 40px;max-width:420px;width:calc(100% - 48px);text-align:center;box-shadow:0 4px 32px rgba(0,0,0,.08);}
-    .icon{font-size:48px;margin-bottom:16px;}
-    h1{font-size:22px;font-weight:700;color:#0e0e14;margin:0 0 10px;}
-    p{font-size:14px;color:#6b6560;line-height:1.6;margin:0 0 24px;}
-    a{display:inline-block;background:#c75b12;color:#fff;text-decoration:none;padding:12px 28px;border-radius:100px;font-size:14px;font-weight:600;}
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="icon">⚠️</div>
-    <h1>${title}</h1>
-    <p>${message}</p>
-    <a href="https://academicplan.pro/app">Open ProPlan Scholar</a>
-  </div>
-</body>
-</html>`;
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>Error — ProPlan Scholar</title><style>body{margin:0;background:#f0ece3;font-family:'Helvetica Neue',Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;}.card{background:#fff;border-radius:20px;padding:48px 40px;max-width:420px;width:calc(100% - 48px);text-align:center;box-shadow:0 4px 32px rgba(0,0,0,.08);}h1{font-size:22px;font-weight:700;color:#0e0e14;margin:0 0 10px;}p{font-size:14px;color:#6b6560;line-height:1.6;margin:0 0 24px;}a{display:inline-block;background:#c75b12;color:#fff;text-decoration:none;padding:12px 28px;border-radius:100px;font-size:14px;font-weight:600;}</style></head><body><div class="card"><div style="font-size:48px;margin-bottom:16px;">⚠️</div><h1>${title}</h1><p>${message}</p><a href="https://academicplan.pro/app">Open ProPlan Scholar</a></div></body></html>`;
 }
