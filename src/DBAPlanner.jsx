@@ -2243,8 +2243,9 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                             onChange={e=>setCourses(p=>p.map(x=>x.id===c.id?{...x,professor:e.target.value}:x))}
                             onBlur={async e=>{
                               const val=e.target.value.trim();
-                              await supabase.from("courses").update({professor:val}).eq("id",c.id);
-                              if(val)notify(`Professor saved: ${val}`);
+                              const{error}=await supabase.from("courses").update({professor:val}).eq("id",c.id);
+                              if(error){notify(`Save error: ${error.message}`);console.error("professor save error:",error);}
+                              else if(val)notify(`Professor saved: ${val}`);
                             }}
                             style={{fontSize:11,padding:"5px 8px"}}/>
                           <div style={{fontSize:10,color:T.faint,marginTop:3}}>Add professor name to search peer ratings</div>
@@ -2380,8 +2381,11 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                   </div>
                   <button className="bp" style={{marginTop:11,fontSize:12}} onClick={async()=>{
                     generateStudyBlocks();
-                    await supabase.from("profiles").update({work_schedule:workSched}).eq("id",authUser.id);
-                    notify("Work schedule saved — study blocks recalculated!");
+                    const uid = authUser?.id;
+                    if(!uid){notify("Error: not logged in");return;}
+                    const{error}=await supabase.from("profiles").update({work_schedule:workSched}).eq("id",uid);
+                    if(error){notify(`Save error: ${error.message}`);console.error("work_schedule save error:",error);}
+                    else{notify("Work schedule saved — study blocks recalculated!");}
                   }}>Save & Recalculate</button>
                 </div>
               )}
