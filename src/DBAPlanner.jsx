@@ -2376,17 +2376,17 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                         {s.work?(
                           <div style={{display:"flex",alignItems:"center",gap:6,flex:1,minWidth:0}}>
                             <select value={s.start} onChange={e=>setWorkSched(p=>({...p,[day]:{...p[day],start:e.target.value}}))} style={{flex:1,fontSize:12,padding:"5px 4px",background:T.subcard,border:`1px solid ${T.border2}`,borderRadius:7,color:T.text,minWidth:0,fontFamily:"inherit"}}>
-                              {["05:00","06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00"].map(t=>{
+                              {["00:00","01:00","02:00","03:00","04:00","05:00","06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00"].map(t=>{
                                 const[h]=t.split(":").map(Number);
-                                const label=h===12?"12 PM":h>12?`${h-12} PM`:`${h} AM`;
+                                const label=h===0?"12 AM":h===12?"12 PM":h>12?`${h-12} PM`:`${h} AM`;
                                 return <option key={t} value={t}>{label}</option>;
                               })}
                             </select>
                             <span style={{fontSize:11,color:T.faint,flexShrink:0}}>–</span>
                             <select value={s.end} onChange={e=>setWorkSched(p=>({...p,[day]:{...p[day],end:e.target.value}}))} style={{flex:1,fontSize:12,padding:"5px 4px",background:T.subcard,border:`1px solid ${T.border2}`,borderRadius:7,color:T.text,minWidth:0,fontFamily:"inherit"}}>
-                              {["06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00"].map(t=>{
+                              {["01:00","02:00","03:00","04:00","05:00","06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00","00:00"].map(t=>{
                                 const[h]=t.split(":").map(Number);
-                                const label=h===12?"12 PM":h>12?`${h-12} PM`:`${h} AM`;
+                                const label=h===0?"12 AM (midnight)":h===12?"12 PM":h>12?`${h-12} PM`:`${h} AM`;
                                 return <option key={t} value={t}>{label}</option>;
                               })}
                             </select>
