@@ -1,47 +1,42 @@
 {
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "framework": null,
-  "rewrites": [
+  "routes": [
     {
-      "source": "/app",
-      "destination": "/index.html"
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
     },
     {
-      "source": "/app/(.*)",
-      "destination": "/index.html"
+      "src": "/app",
+      "dest": "/index.html"
     },
     {
-      "source": "/privacy",
-      "destination": "/privacy.html"
+      "src": "/app/(.*)",
+      "dest": "/index.html"
     },
     {
-      "source": "/terms",
-      "destination": "/terms.html"
+      "src": "/privacy",
+      "dest": "/privacy.html",
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      }
     },
     {
-      "source": "/",
-      "destination": "/landing.html"
-    }
-  ],
-  "headers": [
-    {
-      "source": "/privacy",
-      "headers": [
-        {
-          "key": "Content-Type",
-          "value": "text/html; charset=utf-8"
-        }
-      ]
+      "src": "/terms",
+      "dest": "/terms.html",
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      }
     },
     {
-      "source": "/terms",
-      "headers": [
-        {
-          "key": "Content-Type",
-          "value": "text/html; charset=utf-8"
-        }
-      ]
+      "src": "/assets/(.*)",
+      "dest": "/assets/$1"
+    },
+    {
+      "src": "/(.*)\\.css",
+      "dest": "/$1.css"
+    },
+    {
+      "src": "/",
+      "dest": "/landing.html"
     }
   ],
   "crons": [
