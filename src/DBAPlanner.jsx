@@ -595,7 +595,7 @@ export default function ProPlanScholar(){
 
   async function loadProfile(){
     const{data}=await supabase.from("profiles").select("*").eq("id",authUser.id).single();
-    if(data){setProfile(data);if(data.dark_mode!==undefined)setDark(data.dark_mode);if(data.phone)setUserPhone(data.phone);if(data.canvas_url)setCanvasUrl(data.canvas_url);}
+    if(data){setProfile(data);if(data.dark_mode!==undefined)setDark(data.dark_mode);if(data.phone)setUserPhone(data.phone);if(data.canvas_url)setCanvasUrl(data.canvas_url);if(data.work_schedule&&typeof data.work_schedule==='object')setWorkSched(ws=>({...ws,...data.work_schedule}));}
     else setProfile({id:authUser.id,onboarding_complete:false});
   }
 
@@ -2239,7 +2239,14 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                       return(<div style={{marginBottom:8}}>
                         {/* Professor name field if not set */}
                         {!c.professor&&<div style={{marginBottom:6}}>
-                          <input className="ifield" placeholder="Enter professor name..." value={c.professor||""} onChange={e=>setCourses(p=>p.map(x=>x.id===c.id?{...x,professor:e.target.value}:x))} style={{fontSize:11,padding:"5px 8px"}}/>
+                          <input className="ifield" placeholder="Enter professor name..." value={c.professor||""} 
+                            onChange={e=>setCourses(p=>p.map(x=>x.id===c.id?{...x,professor:e.target.value}:x))}
+                            onBlur={async e=>{
+                              const val=e.target.value.trim();
+                              await supabase.from("courses").update({professor:val}).eq("id",c.id);
+                              if(val)notify(`Professor saved: ${val}`);
+                            }}
+                            style={{fontSize:11,padding:"5px 8px"}}/>
                           <div style={{fontSize:10,color:T.faint,marginTop:3}}>Add professor name to search peer ratings</div>
                         </div>}
 
@@ -2371,7 +2378,11 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                     );})}
                     </div>
                   </div>
-                  <button className="bp" style={{marginTop:11,fontSize:12}} onClick={()=>{generateStudyBlocks();notify("Work schedule saved — study blocks recalculated!");}}>Save & Recalculate</button>
+                  <button className="bp" style={{marginTop:11,fontSize:12}} onClick={async()=>{
+                    generateStudyBlocks();
+                    await supabase.from("profiles").update({work_schedule:workSched}).eq("id",authUser.id);
+                    notify("Work schedule saved — study blocks recalculated!");
+                  }}>Save & Recalculate</button>
                 </div>
               )}
 
