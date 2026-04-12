@@ -1,20 +1,36 @@
 {
-  "name": "proplanner",
+  "name": "proplan-scholar",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:pwa": "vite build",
+    "cap:sync": "npx cap sync",
+    "cap:ios": "npx cap open ios",
+    "cap:android": "npx cap open android",
+    "deploy:mobile": "npm run build && npx cap sync"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.0",
+    "@capacitor/app": "^8.1.0",
+    "@capacitor/browser": "^8.0.3",
+    "@capacitor/cli": "^8.3.0",
+    "@capacitor/core": "^8.3.0",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/ios": "^8.3.0",
+    "@capacitor/keyboard": "^8.0.2",
+    "@capacitor/push-notifications": "^8.0.3",
+    "@capacitor/status-bar": "^8.0.2",
     "@supabase/supabase-js": "^2.101.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
-    "vite": "^5.1.0"
+    "vite": "^5.1.0",
+    "vite-plugin-pwa": "^1.2.0"
   }
 }
