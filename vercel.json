@@ -43,6 +43,10 @@
     {
       "path": "/api/digest/send",
       "schedule": "0 23 * * 0"
+    },
+    {
+      "path": "/api/sms/send",
+      "schedule": "0 14 * * *"
     }
   ]
 }
