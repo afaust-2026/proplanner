@@ -1,321 +1,301 @@
 // api/calendar/[token].js
-// Vercel serverless function — serves a live .ics calendar feed
+// Vercel serverless function — live .ics calendar feed
 // URL: academicplan.pro/api/calendar/<token>
-// Students subscribe to this URL once in their calendar app.
 
-import { createClient } from '@supabase/supabase-js';
+// Use node-fetch style https for Supabase REST calls
+// (avoids npm dependency issues in Vercel serverless)
 
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY // service key — has full read access, never exposed to browser
-);
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || '';
+
+// ── Simple Supabase REST client (no npm package needed) ──────────────────────
+async function supaFetch(table, params = {}) {
+  const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+
+  const res = await fetch(url.toString(), {
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Supabase error ${res.status}: ${text}`);
+  }
+  return res.json();
+}
 
 // ── ICS helpers ───────────────────────────────────────────────────────────────
-
-function icsDate(dateStr) {
-  // Convert YYYY-MM-DD to YYYYMMDD (all-day format)
-  return dateStr.replace(/-/g, '');
-}
+function icsDate(d) { return d ? d.replace(/-/g, '') : ''; }
 
 function icsDateTime(dateStr, timeStr) {
-  // Convert YYYY-MM-DD + HH:MM to YYYYMMDDTHHMMSS (local time, no Z)
+  if (!dateStr) return '';
   if (!timeStr) return icsDate(dateStr);
   const [h, m] = timeStr.split(':');
-  return `${dateStr.replace(/-/g, '')}T${h.padStart(2,'0')}${m.padStart(2,'0')}00`;
+  return `${dateStr.replace(/-/g,'')}T${String(h).padStart(2,'0')}${String(m).padStart(2,'0')}00`;
 }
 
-function icsDateTimeUTC(dateStr, timeStr) {
-  return icsDateTime(dateStr, timeStr) + 'Z';
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n').replace(/\r/g,'');
 }
 
-function escapeICS(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/\\/g, '\\\\')
-    .replace(/;/g, '\\;')
-    .replace(/,/g, '\\,')
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '');
-}
+function uid(type, id, date) { return `${type}-${id}-${date}@academicplan.pro`; }
 
-function uid(prefix, id, date) {
-  return `${prefix}-${id}-${date}@academicplan.pro`;
-}
-
-// Wrap long ICS lines at 75 chars (RFC 5545 requirement)
 function foldLine(line) {
   if (line.length <= 75) return line;
-  let result = '';
-  let i = 0;
+  let out = '', i = 0;
   while (i < line.length) {
-    if (i === 0) {
-      result += line.slice(0, 75);
-      i = 75;
-    } else {
-      result += '\r\n ' + line.slice(i, i + 74);
-      i += 74;
-    }
+    if (i === 0) { out += line.slice(0, 75); i = 75; }
+    else { out += '\r\n ' + line.slice(i, i + 74); i += 74; }
   }
-  return result;
+  return out;
 }
 
-function buildICS(events) {
-  const now = new Date().toISOString().replace(/[-:.]/g, '').slice(0, 15) + 'Z';
-  const lines = [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//ProPlan Scholar//academicplan.pro//EN',
-    'CALSCALE:GREGORIAN',
-    'METHOD:PUBLISH',
-    'X-WR-CALNAME:ProPlan Scholar',
-    'X-WR-TIMEZONE:America/Chicago',
-    'X-WR-CALDESC:Your ProPlan Scholar schedule — classes, study sessions, and assignment deadlines.',
-    ...events.flatMap(e => e),
-    'END:VCALENDAR',
-  ];
-  return lines.map(foldLine).join('\r\n');
+function stamp() {
+  return new Date().toISOString().replace(/[-:.]/g,'').slice(0,15)+'Z';
 }
 
-// ── Course class sessions (recurring weekly) ─────────────────────────────────
-function classEvents(course) {
-  if (!course.class_days?.length || !course.class_time) return [];
-  
-  const dayMap = { Sun: 'SU', Mon: 'MO', Tue: 'TU', Wed: 'WE', Thu: 'TH', Fri: 'FR', Sat: 'SA' };
+// ── Event builders ────────────────────────────────────────────────────────────
+function classEvent(course) {
+  if (!course.class_days?.length) return [];
+  const dayMap = {Sun:'SU',Mon:'MO',Tue:'TU',Wed:'WE',Thu:'TH',Fri:'FR',Sat:'SA'};
   const byDay = course.class_days.map(d => dayMap[d] || d).join(',');
-  
-  // Find the next occurrence of the first class day to use as DTSTART
-  // Use semester start (today or course created_at) as anchor
-  const today = new Date();
-  const dayNums = { SU:0, MO:1, TU:2, WE:3, TH:4, FR:5, SA:6 };
-  const firstDay = dayMap[course.class_days[0]];
-  let start = new Date(today);
-  while (start.getDay() !== (dayNums[firstDay] ?? 0)) {
-    start.setDate(start.getDate() + 1);
-  }
-  const startDate = start.toISOString().slice(0, 10);
-  
-  // End time — default 90 min after start if not set
-  const [sh, sm] = course.class_time.split(':').map(Number);
-  let eh, em;
-  if (course.class_end_time) {
-    [eh, em] = course.class_end_time.split(':').map(Number);
-  } else {
-    eh = sh + 1; em = sm + 30;
-    if (em >= 60) { eh += 1; em -= 60; }
-  }
-  const endTime = `${String(eh).padStart(2,'0')}:${String(em).padStart(2,'0')}`;
+  if (!byDay) return [];
 
-  // Recur until end of year
-  const untilYear = new Date().getFullYear();
-  const until = `${untilYear}1231T235959Z`;
+  // Find next occurrence of first class day
+  const dNums = {SU:0,MO:1,TU:2,WE:3,TH:4,FR:5,SA:6};
+  const first = dayMap[course.class_days[0]];
+  let d = new Date(); d.setHours(0,0,0,0);
+  const target = dNums[first] ?? 0;
+  while (d.getDay() !== target) d.setDate(d.getDate()+1);
+  const startDate = d.toISOString().slice(0,10);
 
-  return [
-    'BEGIN:VEVENT',
-    `UID:${uid('class', course.id, startDate)}`,
-    `DTSTAMP:${new Date().toISOString().replace(/[-:.]/g,'').slice(0,15)}Z`,
-    `DTSTART;TZID=America/Chicago:${icsDateTime(startDate, course.class_time)}`,
-    `DTEND;TZID=America/Chicago:${icsDateTime(startDate, endTime)}`,
+  const startT = course.class_time || '09:00';
+  let endT = course.class_end_time;
+  if (!endT) {
+    const [sh,sm] = startT.split(':').map(Number);
+    let eh = sh+1, em = sm+30;
+    if (em >= 60) { eh++; em -= 60; }
+    endT = `${String(eh).padStart(2,'0')}:${String(em).padStart(2,'0')}`;
+  }
+  const until = `${new Date().getFullYear()}1231T235959Z`;
+
+  return ['BEGIN:VEVENT',
+    `UID:${uid('class',course.id,startDate)}`,
+    `DTSTAMP:${stamp()}`,
+    `DTSTART;TZID=America/Chicago:${icsDateTime(startDate,startT)}`,
+    `DTEND;TZID=America/Chicago:${icsDateTime(startDate,endT)}`,
     `RRULE:FREQ=WEEKLY;BYDAY=${byDay};UNTIL=${until}`,
-    `SUMMARY:🎓 ${escapeICS(course.name)}`,
-    `DESCRIPTION:${escapeICS(course.professor ? `Professor: ${course.professor}` : course.name)}`,
-    `COLOR:${course.color || '#10b981'}`,
+    `SUMMARY:🎓 ${esc(course.name)}`,
+    course.professor ? `DESCRIPTION:Professor: ${esc(course.professor)}` : `DESCRIPTION:${esc(course.name)}`,
     'CATEGORIES:CLASS',
-    'END:VEVENT',
-  ];
+    'END:VEVENT'];
 }
 
-// ── Assignment due dates ──────────────────────────────────────────────────────
-function assignmentEvent(assignment, course) {
-  if (!assignment.due_date) return [];
-  return [
-    'BEGIN:VEVENT',
-    `UID:${uid('due', assignment.id, assignment.due_date)}`,
-    `DTSTAMP:${new Date().toISOString().replace(/[-:.]/g,'').slice(0,15)}Z`,
-    `DTSTART;VALUE=DATE:${icsDate(assignment.due_date)}`,
-    `DTEND;VALUE=DATE:${icsDate(assignment.due_date)}`,
-    `SUMMARY:📌 ${escapeICS(assignment.title)} DUE`,
-    `DESCRIPTION:Course: ${escapeICS(course?.name || '')}\\nType: ${escapeICS(assignment.type || '')}\\nEst. hours: ${assignment.est_hours || 2}`,
+function assignmentEvent(a, course) {
+  if (!a.due_date) return [];
+  return ['BEGIN:VEVENT',
+    `UID:${uid('due',a.id,a.due_date)}`,
+    `DTSTAMP:${stamp()}`,
+    `DTSTART;VALUE=DATE:${icsDate(a.due_date)}`,
+    `DTEND;VALUE=DATE:${icsDate(a.due_date)}`,
+    `SUMMARY:📌 ${esc(a.title)} — DUE`,
+    `DESCRIPTION:Course: ${esc(course?.name||'')}\\nType: ${esc(a.type||'')}\\nEstimated hours: ${a.est_hours||2}`,
     'CATEGORIES:ASSIGNMENT',
-    assignment.done ? 'STATUS:COMPLETED' : 'STATUS:CONFIRMED',
-    'END:VEVENT',
-  ];
+    a.done ? 'STATUS:COMPLETED' : 'STATUS:CONFIRMED',
+    'END:VEVENT'];
 }
 
-// ── Study blocks (calculated from assignments like the app does) ──────────────
-function studyEvent(assignment, course, dateStr, startTime, endTime) {
-  return [
-    'BEGIN:VEVENT',
-    `UID:${uid('study', assignment.id, dateStr)}`,
-    `DTSTAMP:${new Date().toISOString().replace(/[-:.]/g,'').slice(0,15)}Z`,
-    `DTSTART;TZID=America/Chicago:${icsDateTime(dateStr, startTime)}`,
-    `DTEND;TZID=America/Chicago:${icsDateTime(dateStr, endTime)}`,
-    `SUMMARY:📚 Study: ${escapeICS(assignment.title)}`,
-    `DESCRIPTION:Course: ${escapeICS(course?.name || '')}\\nTopics: ${escapeICS(assignment.topics || 'See assignment notes')}`,
-    `COLOR:${course?.color || '#0ea5e9'}`,
+function studyEvent(a, course, dateStr, startTime, endTime) {
+  return ['BEGIN:VEVENT',
+    `UID:${uid('study',a.id,dateStr)}`,
+    `DTSTAMP:${stamp()}`,
+    `DTSTART;TZID=America/Chicago:${icsDateTime(dateStr,startTime)}`,
+    `DTEND;TZID=America/Chicago:${icsDateTime(dateStr,endTime)}`,
+    `SUMMARY:📚 Study: ${esc(a.title)}`,
+    `DESCRIPTION:Course: ${esc(course?.name||'')}\\nTopics: ${esc(a.topics||'')}`,
     'CATEGORIES:STUDY',
-    'END:VEVENT',
-  ];
+    'END:VEVENT'];
 }
 
-// ── Milestone events ──────────────────────────────────────────────────────────
-function milestoneEvent(milestone) {
-  if (!milestone.due_date) return [];
-  return [
-    'BEGIN:VEVENT',
-    `UID:${uid('milestone', milestone.id, milestone.due_date)}`,
-    `DTSTAMP:${new Date().toISOString().replace(/[-:.]/g,'').slice(0,15)}Z`,
-    `DTSTART;VALUE=DATE:${icsDate(milestone.due_date)}`,
-    `DTEND;VALUE=DATE:${icsDate(milestone.due_date)}`,
-    `SUMMARY:⬟ ${escapeICS(milestone.title)}`,
-    `DESCRIPTION:${escapeICS(milestone.notes || '')}`,
+function milestoneEvent(m) {
+  if (!m.due_date) return [];
+  return ['BEGIN:VEVENT',
+    `UID:${uid('ms',m.id,m.due_date)}`,
+    `DTSTAMP:${stamp()}`,
+    `DTSTART;VALUE=DATE:${icsDate(m.due_date)}`,
+    `DTEND;VALUE=DATE:${icsDate(m.due_date)}`,
+    `SUMMARY:⬟ ${esc(m.title)}`,
+    m.notes ? `DESCRIPTION:${esc(m.notes)}` : '',
     'CATEGORIES:MILESTONE',
-    milestone.done ? 'STATUS:COMPLETED' : 'STATUS:CONFIRMED',
-    'END:VEVENT',
-  ];
+    m.done ? 'STATUS:COMPLETED' : 'STATUS:CONFIRMED',
+    'END:VEVENT'].filter(Boolean);
 }
 
-// ── Travel / blackout dates ───────────────────────────────────────────────────
-function travelEvent(travel) {
-  return [
-    'BEGIN:VEVENT',
-    `UID:${uid('travel', travel.id, travel.start_date)}`,
-    `DTSTAMP:${new Date().toISOString().replace(/[-:.]/g,'').slice(0,15)}Z`,
-    `DTSTART;VALUE=DATE:${icsDate(travel.start_date)}`,
-    `DTEND;VALUE=DATE:${icsDate(travel.end_date)}`,
-    `SUMMARY:✈️ ${escapeICS(travel.label || 'Travel / Blackout')}`,
+function travelEvent(tr) {
+  const start = tr.start_date || tr.start;
+  const end = tr.end_date || tr.end;
+  if (!start) return [];
+  return ['BEGIN:VEVENT',
+    `UID:${uid('travel',tr.id,start)}`,
+    `DTSTAMP:${stamp()}`,
+    `DTSTART;VALUE=DATE:${icsDate(start)}`,
+    `DTEND;VALUE=DATE:${icsDate(end||start)}`,
+    `SUMMARY:✈️ ${esc(tr.label||'Blackout')}`,
     'CATEGORIES:TRAVEL',
     'TRANSP:OPAQUE',
-    'END:VEVENT',
-  ];
+    'END:VEVENT'];
 }
 
-// ── Simple study scheduler (mirrors the app logic) ───────────────────────────
-function generateStudyBlocks(assignments, courses, travelDates) {
+// ── Study scheduler (mirrors app logic) ──────────────────────────────────────
+function buildStudyBlocks(assignments, courses, travelDates) {
   const blocks = [];
   const dailyCount = {};
-  const dailyNextStart = {};
+  const dailyNext = {};
+  const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
-  const DAYS_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const isTravel = (d) => travelDates.some(tr => {
+    const s = tr.start_date||tr.start||''; const e = tr.end_date||tr.end||'';
+    return d >= s && d <= e;
+  });
 
-  function isTravel(dateStr) {
-    return travelDates.some(tr => dateStr >= tr.start_date && dateStr <= tr.end_date);
-  }
-
-  function daysUntil(due) {
+  const daysUntil = (due) => {
     const n = new Date(); n.setHours(0,0,0,0);
-    return Math.ceil((new Date(due + 'T00:00:00') - n) / 86400000);
-  }
+    return Math.ceil((new Date(due+'T00:00:00')-n)/86400000);
+  };
 
-  const pending = assignments
-    .filter(a => !a.done && daysUntil(a.due_date) >= 0)
-    .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+  const pending = (assignments||[])
+    .filter(a => !a.done && a.due_date && daysUntil(a.due_date) >= 0)
+    .sort((a,b) => new Date(a.due_date)-new Date(b.due_date));
 
-  pending.forEach(assign => {
-    const course = courses.find(c => c.id === assign.course_id);
+  for (const a of pending) {
+    const course = (courses||[]).find(c => c.id === a.course_id);
     const diff = course?.difficulty || 3;
-    const sessions = Math.ceil((assign.est_hours || 2) * (diff / 3) / 2);
+    const sessions = Math.ceil((a.est_hours||2)*(diff/3)/2);
     let placed = 0;
-    let checkDay = new Date(); checkDay.setHours(0,0,0,0);
-    const dueDay = new Date(assign.due_date + 'T00:00:00');
+    let day = new Date(); day.setHours(0,0,0,0);
+    const due = new Date(a.due_date+'T00:00:00');
 
-    while (placed < sessions && checkDay < dueDay) {
-      const dateStr = checkDay.toISOString().slice(0, 10);
-      const dayName = DAYS_SHORT[checkDay.getDay()];
-      const alreadyOnDay = dailyCount[dateStr] || 0;
-
-      if (!isTravel(dateStr) && alreadyOnDay < 2) {
-        const baseStartH = 18; // default evening
-        const startH = Math.max(baseStartH, dailyNextStart[dateStr] || baseStartH);
+    while (placed < sessions && day < due) {
+      const ds = day.toISOString().slice(0,10);
+      if (!isTravel(ds) && (dailyCount[ds]||0) < 2) {
+        const base = 18;
+        const startH = Math.max(base, dailyNext[ds]||base);
         const endH = startH + 2;
-
         if (endH <= 22) {
-          const startTime = `${String(startH).padStart(2,'0')}:00`;
-          const endTime = `${String(endH).padStart(2,'0')}:00`;
-          blocks.push({ assign, course, dateStr, startTime, endTime });
-          dailyNextStart[dateStr] = endH;
-          dailyCount[dateStr] = (dailyCount[dateStr] || 0) + 1;
+          const st = `${String(startH).padStart(2,'0')}:00`;
+          const et = `${String(endH).padStart(2,'0')}:00`;
+          blocks.push({a, course, ds, st, et});
+          dailyNext[ds] = endH;
+          dailyCount[ds] = (dailyCount[ds]||0)+1;
           placed++;
         }
       }
-      checkDay.setDate(checkDay.getDate() + 1);
+      day.setDate(day.getDate()+1);
     }
-  });
-
+  }
   return blocks;
 }
 
-// ── Main handler ─────────────────────────────────────────────────────────────
+// ── Main handler ──────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   const { token } = req.query;
 
-  if (!token) {
-    return res.status(400).send('Missing calendar token');
+  // Config check
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    return res.status(500).send([
+      'BEGIN:VCALENDAR','VERSION:2.0',
+      'PRODID:-//ProPlan Scholar//Error//EN',
+      'X-WR-CALNAME:ProPlan Scholar — Setup Required',
+      'BEGIN:VEVENT',`UID:error-config@academicplan.pro`,
+      `DTSTAMP:${stamp()}`,
+      `DTSTART;VALUE=DATE:${icsDate(new Date().toISOString().slice(0,10))}`,
+      `DTEND;VALUE=DATE:${icsDate(new Date().toISOString().slice(0,10))}`,
+      'SUMMARY:⚠️ Calendar setup incomplete — check Vercel env vars',
+      'END:VEVENT','END:VCALENDAR'
+    ].join('\r\n'));
   }
 
-  try {
-    // Look up the token to get the user_id
-    const { data: tokenRow, error: tokenErr } = await supabase
-      .from('calendar_tokens')
-      .select('user_id')
-      .eq('token', token)
-      .single();
+  if (!token) return res.status(400).send('Missing token');
 
-    if (tokenErr || !tokenRow) {
-      return res.status(404).send('Calendar not found. Please regenerate your calendar link in ProPlan Scholar.');
+  try {
+    // Look up token → user_id
+    const tokens = await supaFetch('calendar_tokens', {
+      token: `eq.${token}`,
+      select: 'user_id',
+      limit: '1',
+    });
+
+    if (!tokens?.length) {
+      return res.status(404).send(
+        'Calendar not found. Please regenerate your calendar link in ProPlan Scholar Settings.'
+      );
     }
 
-    const userId = tokenRow.user_id;
+    const userId = tokens[0].user_id;
 
-    // Fetch all user data in parallel
-    const [
-      { data: courses },
-      { data: assignments },
-      { data: milestones },
-      { data: travelDates },
-      { data: profile },
-    ] = await Promise.all([
-      supabase.from('courses').select('*').eq('user_id', userId),
-      supabase.from('assignments').select('*').eq('user_id', userId),
-      supabase.from('milestones').select('*').eq('user_id', userId),
-      supabase.from('travel_dates').select('*').eq('user_id', userId),
-      supabase.from('profiles').select('full_name').eq('id', userId).single(),
+    // Fetch all data in parallel
+    const [courses, assignments, milestones, travels, profiles] = await Promise.all([
+      supaFetch('courses',        { user_id: `eq.${userId}`, select: '*' }),
+      supaFetch('assignments',    { user_id: `eq.${userId}`, select: '*' }),
+      supaFetch('milestones',     { user_id: `eq.${userId}`, select: '*' }),
+      supaFetch('travel_dates',   { user_id: `eq.${userId}`, select: '*' }),
+      supaFetch('profiles',       { id: `eq.${userId}`, select: 'full_name', limit: '1' }),
     ]);
 
-    // Build study blocks
-    const studyBlocks = generateStudyBlocks(
-      assignments || [],
-      courses || [],
-      travelDates || []
-    );
+    const name = (profiles?.[0]?.full_name || 'Student').replace(/\s+/g,'-').toLowerCase();
 
-    // Build all events
-    const events = [
-      // Class sessions (recurring)
-      ...(courses || []).flatMap(c => classEvents(c)),
-      // Assignment due dates
-      ...(assignments || []).flatMap(a => {
-        const course = (courses || []).find(c => c.id === a.course_id);
-        return assignmentEvent(a, course);
-      }),
-      // Study blocks
-      ...studyBlocks.map(b => studyEvent(b.assign, b.course, b.dateStr, b.startTime, b.endTime)),
-      // Milestones
-      ...(milestones || []).flatMap(m => milestoneEvent(m)),
-      // Travel / blackout dates
-      ...(travelDates || []).flatMap(t => travelEvent(t)),
+    // Build events
+    const studyBlocks = buildStudyBlocks(assignments, courses, travels);
+
+    const allEvents = [
+      ...(courses||[]).flatMap(c => classEvent(c)),
+      ...(assignments||[]).flatMap(a => assignmentEvent(a, (courses||[]).find(c=>c.id===a.course_id))),
+      ...studyBlocks.map(b => studyEvent(b.a, b.course, b.ds, b.st, b.et)),
+      ...(milestones||[]).flatMap(m => milestoneEvent(m)),
+      ...(travels||[]).flatMap(t => travelEvent(t)),
     ];
 
-    const ics = buildICS(events);
-    const name = profile?.full_name || 'Student';
+    const icsLines = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//ProPlan Scholar//academicplan.pro//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'X-WR-CALNAME:ProPlan Scholar',
+      'X-WR-TIMEZONE:America/Chicago',
+      'X-WR-CALDESC:Your ProPlan Scholar schedule — classes\\, study sessions\\, and deadlines.',
+      ...allEvents,
+      'END:VCALENDAR',
+    ].map(foldLine).join('\r\n');
 
     res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="proplan-scholar-${name.replace(/\s+/g,'-').toLowerCase()}.ics"`);
+    res.setHeader('Content-Disposition', `attachment; filename="proplan-${name}.ics"`);
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.status(200).send(ics);
+    return res.status(200).send(icsLines);
 
   } catch (err) {
-    console.error('Calendar feed error:', err);
-    res.status(500).send('Error generating calendar feed');
+    console.error('Calendar error:', err.message);
+    // Return a valid but empty calendar instead of crashing
+    const errICS = [
+      'BEGIN:VCALENDAR','VERSION:2.0',
+      'PRODID:-//ProPlan Scholar//Error//EN',
+      'X-WR-CALNAME:ProPlan Scholar',
+      'BEGIN:VEVENT',
+      `UID:error-${Date.now()}@academicplan.pro`,
+      `DTSTAMP:${stamp()}`,
+      `DTSTART;VALUE=DATE:${icsDate(new Date().toISOString().slice(0,10))}`,
+      `DTEND;VALUE=DATE:${icsDate(new Date().toISOString().slice(0,10))}`,
+      `SUMMARY:⚠️ Calendar sync error — please regenerate your link`,
+      `DESCRIPTION:Error: ${esc(err.message)}`,
+      'END:VEVENT','END:VCALENDAR'
+    ].join('\r\n');
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    return res.status(200).send(errICS);
   }
 }
