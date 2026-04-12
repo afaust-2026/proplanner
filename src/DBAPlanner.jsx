@@ -2360,24 +2360,42 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                 <div className="card" style={{marginBottom:12}}>
                   <div style={{fontWeight:700,marginBottom:4}}>💼 Work Schedule</div>
                   <div style={{fontSize:12,color:T.muted,marginBottom:10}}>Toggle each day independently and set your exact work hours.</div>
-                  <div className="work-sched-grid">
-                    <div className="work-sched-inner">
+                  {/* Work schedule — vertical row layout, works on any screen size */}
+                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
                     {DAYS_SHORT.map(day=>{const s=workSched[day];return(
-                      <div key={day} style={{display:"flex",flexDirection:"column",gap:6,padding:"10px 8px",background:T.subcard,borderRadius:10,border:`1px solid ${s.work?T.accent:T.border2}`,transition:"border-color .2s"}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                          <span style={{fontSize:11,fontWeight:700,color:s.work?T.accent:T.faint}}>{day}</span>
-                          <button onClick={()=>setWorkSched(p=>({...p,[day]:{...p[day],work:!p[day].work}}))} style={{width:28,height:16,borderRadius:20,background:s.work?T.accent:T.border2,border:"none",position:"relative",cursor:"pointer",transition:"background .2s",flexShrink:0}}>
-                            <div style={{position:"absolute",top:2,left:s.work?13:2,width:12,height:12,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
-                          </button>
+                      <div key={day} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:T.subcard,borderRadius:10,border:`1px solid ${s.work?T.accent:T.border2}`,transition:"border-color .2s"}}>
+                        {/* Day name */}
+                        <div style={{width:34,flexShrink:0}}>
+                          <span style={{fontSize:13,fontWeight:700,color:s.work?T.accent:T.faint}}>{day}</span>
                         </div>
-                        {s.work&&(<>
-                          <input type="time" className="ifield" value={s.start} onChange={e=>setWorkSched(p=>({...p,[day]:{...p[day],start:e.target.value}}))} style={{fontSize:12,padding:"6px 4px",textAlign:"center"}}/>
-                          <input type="time" className="ifield" value={s.end} onChange={e=>setWorkSched(p=>({...p,[day]:{...p[day],end:e.target.value}}))} style={{fontSize:12,padding:"6px 4px",textAlign:"center"}}/>
-                        </>)}
-                        {!s.work&&<div style={{fontSize:11,color:T.faint,textAlign:"center",paddingTop:4}}>Free</div>}
+                        {/* Toggle */}
+                        <button onClick={()=>setWorkSched(p=>({...p,[day]:{...p[day],work:!p[day].work}}))} style={{width:36,height:20,borderRadius:20,background:s.work?T.accent:T.border2,border:"none",position:"relative",cursor:"pointer",transition:"background .2s",flexShrink:0}}>
+                          <div style={{position:"absolute",top:2,left:s.work?17:2,width:16,height:16,borderRadius:"50%",background:"#fff",transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,.2)"}}/>
+                        </button>
+                        {/* Times or Free label */}
+                        {s.work?(
+                          <div style={{display:"flex",alignItems:"center",gap:6,flex:1,minWidth:0}}>
+                            <select value={s.start} onChange={e=>setWorkSched(p=>({...p,[day]:{...p[day],start:e.target.value}}))} style={{flex:1,fontSize:12,padding:"5px 4px",background:T.subcard,border:`1px solid ${T.border2}`,borderRadius:7,color:T.text,minWidth:0,fontFamily:"inherit"}}>
+                              {["05:00","06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00"].map(t=>{
+                                const[h]=t.split(":").map(Number);
+                                const label=h===12?"12 PM":h>12?`${h-12} PM`:`${h} AM`;
+                                return <option key={t} value={t}>{label}</option>;
+                              })}
+                            </select>
+                            <span style={{fontSize:11,color:T.faint,flexShrink:0}}>–</span>
+                            <select value={s.end} onChange={e=>setWorkSched(p=>({...p,[day]:{...p[day],end:e.target.value}}))} style={{flex:1,fontSize:12,padding:"5px 4px",background:T.subcard,border:`1px solid ${T.border2}`,borderRadius:7,color:T.text,minWidth:0,fontFamily:"inherit"}}>
+                              {["06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00"].map(t=>{
+                                const[h]=t.split(":").map(Number);
+                                const label=h===12?"12 PM":h>12?`${h-12} PM`:`${h} AM`;
+                                return <option key={t} value={t}>{label}</option>;
+                              })}
+                            </select>
+                          </div>
+                        ):(
+                          <span style={{fontSize:12,color:T.faint,flex:1}}>Day off</span>
+                        )}
                       </div>
                     );})}
-                    </div>
                   </div>
                   <button className="bp" style={{marginTop:11,fontSize:12}} onClick={async()=>{
                     generateStudyBlocks();
