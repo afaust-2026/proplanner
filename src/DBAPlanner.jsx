@@ -447,7 +447,7 @@ export default function ProPlanScholar(){
   const[view,setView]=useState(()=>{
     // Read initial view from URL hash so deep links work
     const hash=window.location.hash.replace("#","");
-    const validViews=["dashboard","calendar","assignments","courses","schedule","dissertation","flashcards","settings"];
+    const validViews=["dashboard","calendar","assignments","courses","schedule","dissertation","flashcards","analytics","settings"];
     return validViews.includes(hash)?hash:"dashboard";
   });
   const[dark,setDark]=useState(()=>window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);
@@ -546,6 +546,10 @@ export default function ProPlanScholar(){
 
   const uniRaw=UNIVERSITIES.find(u=>u.id===profile?.university)||UNIVERSITIES[0];
   const uni={...uniRaw,name:profile?.university==="custom"&&profile?.university_name?profile.university_name:uniRaw.name,logo:profile?.university==="custom"?"🎓":uniRaw.logo};
+  // Feature gating — plan is "free" until Stripe sets it to "pro"
+  const isPro=profile?.plan==="pro";
+  const FREE_SYLLABUS_LIMIT=2; // max syllabi imports per semester on free plan
+  const syllabusCount=courses.filter(c=>c.imported_at).length; // count AI-imported courses
   const T=buildTheme(profile?.university_primary||"#6366f1",dark);
   const rgb=hexToRgb(T.accent);
 
@@ -578,7 +582,7 @@ export default function ProPlanScholar(){
   useEffect(()=>{
     function onPopState(e){
       const hash=window.location.hash.replace("#","");
-      const validViews=["dashboard","calendar","assignments","courses","schedule","dissertation","flashcards","settings"];
+      const validViews=["dashboard","calendar","assignments","courses","schedule","dissertation","flashcards","analytics","settings"];
       if(validViews.includes(hash))setView(hash);
       else setView("dashboard");
     }
@@ -618,6 +622,21 @@ export default function ProPlanScholar(){
   }
 
   function notify(msg){setNotification(msg);setTimeout(()=>setNotification(""),3500);}
+
+  // ── Feature gate helper ───────────────────────────────────────────────────
+  function ProGate({feature,children}){
+    if(isPro)return children;
+    return(
+      <div style={{padding:"16px",background:dark?"rgba(199,91,18,.08)":"rgba(199,91,18,.05)",border:`1px solid rgba(${rgb},.3)`,borderRadius:12,textAlign:"center"}}>
+        <div style={{fontSize:20,marginBottom:8}}>🔒</div>
+        <div style={{fontSize:13,fontWeight:700,marginBottom:4}}>Pro Feature</div>
+        <div style={{fontSize:12,color:T.muted,marginBottom:12}}>{feature} is available on the Pro plan.</div>
+        <button className="bp" style={{fontSize:12,padding:"8px 20px"}} onClick={()=>notify("Stripe payments coming soon! You'll be able to upgrade for $5/month.")}>
+          Upgrade to Pro — $5/mo
+        </button>
+      </div>
+    );
+  }
   function showConfirm(message,onConfirm,detail=""){setConfirmModal({message,onConfirm,detail});}
 
   // ── Study scheduler (respects work, sports, greek, travel) ─────────────────
@@ -1395,6 +1414,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
     {id:"schedule",icon:"⊞",label:"My Schedule"},
     {id:"dissertation",icon:"⬟",label:["doctoral","postdoc"].includes(profile?.degree_level)?"Dissertation":["graduate"].includes(profile?.degree_level)?"Thesis / Capstone":"Major Project"},
     {id:"flashcards",icon:"⬡",label:"Flashcards"},
+    {id:"analytics",icon:"◑",label:"Analytics"},
     {id:"settings",icon:"◌",label:"Settings"},
   ];
 
@@ -2555,6 +2575,207 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
           )}
 
           {/* ── SETTINGS ── */}
+          {view==="analytics"&&(
+            <div className="fi">
+              <div style={{marginBottom:16}}>
+                <div style={{fontSize:10,letterSpacing:3,color:T.accent,textTransform:"uppercase"}}>Insights</div>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <h1 style={{fontSize:22,fontWeight:700}}>Analytics</h1>
+                  {!isPro&&<span style={{fontSize:9,background:`rgba(${rgb},.15)`,color:T.accent,padding:"2px 8px",borderRadius:8,fontWeight:700,letterSpacing:.5}}>PRO</span>}
+                </div>
+              </div>
+              {!isPro&&(
+                <div style={{marginBottom:14,padding:"14px 16px",background:dark?"rgba(199,91,18,.08)":"rgba(199,91,18,.05)",border:`1px solid rgba(${rgb},.25)`,borderRadius:12}}>
+                  <div style={{fontSize:13,fontWeight:700,marginBottom:4}}>📊 Analytics is a Pro feature</div>
+                  <div style={{fontSize:12,color:T.muted,marginBottom:12,lineHeight:1.6}}>Upgrade to Pro for full analytics including workload forecast, grade risk assessment, study consistency score, and energy trends.</div>
+                  <button className="bp" style={{fontSize:12,padding:"8px 20px"}} onClick={()=>notify("Stripe payments coming soon! Upgrade for $5/month.")}>Upgrade to Pro — $5/mo</button>
+                </div>
+              )}
+
+              {/* ── Semester Overview ── */}
+              <div className="card" style={{marginBottom:12}}>
+                <div style={{fontSize:10,letterSpacing:2,color:T.accent,textTransform:"uppercase",marginBottom:12}}>Semester Overview</div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:16}}>
+                  {[
+                    {label:"Completion Rate",value:`${assignments.length>0?Math.round(assignments.filter(a=>a.done).length/assignments.length*100):0}%`,color:T.success,icon:"✓"},
+                    {label:"On Time",value:`${assignments.filter(a=>a.done).length>0?Math.round(assignments.filter(a=>a.done&&daysUntil(a.due)>=0).length/Math.max(assignments.filter(a=>a.done).length,1)*100):0}%`,color:"#0ea5e9",icon:"⏱"},
+                    {label:"Overdue",value:assignments.filter(a=>!a.done&&daysUntil(a.due)<0).length,color:T.danger,icon:"⚠"},
+                    {label:"Study Hrs Done",value:`${Object.keys(completedStudy).filter(k=>completedStudy[k]).length*2}h`,color:"#a78bfa",icon:"📚"},
+                  ].map(s=>(
+                    <div key={s.label} style={{padding:"12px 10px",background:T.subcard,borderRadius:12,border:`1px solid ${T.border2}`,textAlign:"center"}}>
+                      <div style={{fontSize:22,fontWeight:700,color:s.color}}>{s.value}</div>
+                      <div style={{fontSize:10,color:T.faint,marginTop:3,lineHeight:1.3}}>{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Progress bar per course */}
+                <div style={{fontSize:11,fontWeight:600,marginBottom:8,color:T.muted,letterSpacing:.5,textTransform:"uppercase"}}>By Course</div>
+                {courses.map(c=>{
+                  const ca=assignments.filter(a=>a.courseId===c.id);
+                  const done=ca.filter(a=>a.done).length;
+                  const total=ca.length;
+                  const pct=total>0?Math.round(done/total*100):0;
+                  const overdue=ca.filter(a=>!a.done&&daysUntil(a.due)<0).length;
+                  return(
+                    <div key={c.id} style={{marginBottom:10}}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                        <div style={{display:"flex",alignItems:"center",gap:6}}>
+                          <div style={{width:8,height:8,borderRadius:"50%",background:c.color,flexShrink:0}}/>
+                          <span style={{fontSize:12,fontWeight:600}}>{c.name}</span>
+                          {overdue>0&&<span style={{fontSize:9,background:"rgba(239,68,68,.15)",color:T.danger,padding:"1px 5px",borderRadius:6,fontWeight:700}}>{overdue} overdue</span>}
+                        </div>
+                        <span style={{fontSize:12,color:T.muted}}>{done}/{total} done</span>
+                      </div>
+                      <div className="prog-bar" style={{height:6}}>
+                        <div className="prog-fill" style={{width:`${pct}%`,background:c.color}}/>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* ── Study Consistency ── */}
+              <div className="card" style={{marginBottom:12}}>
+                <div style={{fontSize:10,letterSpacing:2,color:T.accent,textTransform:"uppercase",marginBottom:12}}>Study Consistency</div>
+                {(()=>{
+                  const total=studyBlocks.length;
+                  const completed=studyBlocks.filter(b=>completedStudy[b.id]).length;
+                  const missed=studyBlocks.filter(b=>!completedStudy[b.id]&&daysUntil(b.date)<0).length;
+                  const upcoming=studyBlocks.filter(b=>daysUntil(b.date)>=0).length;
+                  const rate=total>0?Math.round(completed/(completed+missed||1)*100):0;
+                  return(
+                    <div>
+                      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
+                        <div style={{position:"relative",width:72,height:72,flexShrink:0}}>
+                          <svg width="72" height="72" viewBox="0 0 72 72">
+                            <circle cx="36" cy="36" r="28" fill="none" stroke={T.border2} strokeWidth="8"/>
+                            <circle cx="36" cy="36" r="28" fill="none" stroke={rate>=70?"#22c55e":rate>=40?"#eab308":"#ef4444"} strokeWidth="8"
+                              strokeDasharray={`${rate*1.759} 175.9`} strokeDashoffset="43.98" strokeLinecap="round"/>
+                          </svg>
+                          <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:rate>=70?T.success:rate>=40?T.caution:T.danger}}>{rate}%</div>
+                        </div>
+                        <div>
+                          <div style={{fontSize:15,fontWeight:700,marginBottom:4}}>{rate>=70?"Great consistency! 🎉":rate>=40?"Room to improve 📈":"Needs attention ⚠️"}</div>
+                          <div style={{fontSize:12,color:T.muted}}>You've completed {completed} of {completed+missed} past study sessions</div>
+                        </div>
+                      </div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+                        {[{label:"Completed",value:completed,color:T.success},{label:"Missed",value:missed,color:T.danger},{label:"Upcoming",value:upcoming,color:"#0ea5e9"}].map(s=>(
+                          <div key={s.label} style={{padding:"8px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`,textAlign:"center"}}>
+                            <div style={{fontSize:20,fontWeight:700,color:s.color}}>{s.value}</div>
+                            <div style={{fontSize:10,color:T.faint}}>{s.label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* ── Workload Forecast ── */}
+              <div className="card" style={{marginBottom:12}}>
+                <div style={{fontSize:10,letterSpacing:2,color:T.accent,textTransform:"uppercase",marginBottom:12}}>Workload Forecast — Next 4 Weeks</div>
+                {(()=>{
+                  const weeks=Array.from({length:4},(_,i)=>{
+                    const start=new Date();start.setHours(0,0,0,0);
+                    start.setDate(start.getDate()+i*7);
+                    const end=new Date(start);end.setDate(end.getDate()+6);
+                    const startStr=start.toISOString().slice(0,10);
+                    const endStr=end.toISOString().slice(0,10);
+                    const weekDeadlines=assignments.filter(a=>!a.done&&a.due>=startStr&&a.due<=endStr);
+                    const weekStudy=studyBlocks.filter(b=>b.date>=startStr&&b.date<=endStr).length*2;
+                    const label=i===0?"This week":i===1?"Next week":`Week ${i+1}`;
+                    return{label,deadlines:weekDeadlines,studyHrs:weekStudy,start:startStr};
+                  });
+                  const maxStudy=Math.max(...weeks.map(w=>w.studyHrs),1);
+                  return weeks.map((w,i)=>(
+                    <div key={i} style={{marginBottom:12,padding:"10px 12px",background:T.subcard,borderRadius:10,border:`1px solid ${w.deadlines.length>=3?T.danger:w.deadlines.length>=2?T.caution:T.border2}`}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                        <span style={{fontSize:12,fontWeight:700}}>{w.label}</span>
+                        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                          {w.deadlines.length>0&&<span style={{fontSize:10,color:w.deadlines.length>=3?T.danger:T.caution,fontWeight:600}}>📌 {w.deadlines.length} deadline{w.deadlines.length>1?"s":""}</span>}
+                          <span style={{fontSize:10,color:"#0ea5e9"}}>📚 {w.studyHrs}h</span>
+                        </div>
+                      </div>
+                      <div style={{height:6,background:T.border,borderRadius:3,overflow:"hidden"}}>
+                        <div style={{height:"100%",width:`${(w.studyHrs/maxStudy)*100}%`,background:w.deadlines.length>=3?"#ef4444":w.deadlines.length>=2?"#eab308":"#0ea5e9",borderRadius:3,transition:"width .4s ease"}}/>
+                      </div>
+                      {w.deadlines.length>0&&<div style={{marginTop:6,display:"flex",flexWrap:"wrap",gap:4}}>
+                        {w.deadlines.slice(0,3).map(a=><span key={a.id} style={{fontSize:9,padding:"1px 6px",background:`rgba(${hexToRgb(courses.find(c=>c.id===a.courseId)?.color||T.accent)},.2)`,color:courses.find(c=>c.id===a.courseId)?.color||T.accent,borderRadius:6}}>{a.title.length>18?a.title.slice(0,18)+"…":a.title}</span>)}
+                        {w.deadlines.length>3&&<span style={{fontSize:9,color:T.faint}}>+{w.deadlines.length-3} more</span>}
+                      </div>}
+                    </div>
+                  ));
+                })()}
+              </div>
+
+              {/* ── Grade Risk Indicator ── */}
+              <div className="card" style={{marginBottom:12}}>
+                <div style={{fontSize:10,letterSpacing:2,color:T.accent,textTransform:"uppercase",marginBottom:12}}>Course Risk Assessment</div>
+                <div style={{fontSize:11,color:T.muted,marginBottom:12,lineHeight:1.6}}>Based on overdue assignments, upcoming deadlines, and study session completion rate per course.</div>
+                {courses.map(c=>{
+                  const ca=assignments.filter(a=>a.courseId===c.id&&!a.done);
+                  const overdueCount=ca.filter(a=>daysUntil(a.due)<0).length;
+                  const urgentCount=ca.filter(a=>daysUntil(a.due)>=0&&daysUntil(a.due)<=3).length;
+                  const courseStudy=studyBlocks.filter(b=>b.courseId===c.id);
+                  const completedPct=courseStudy.length>0?courseStudy.filter(b=>completedStudy[b.id]).length/courseStudy.length:1;
+                  // Risk score 0-100
+                  let risk=0;
+                  if(overdueCount>0)risk+=overdueCount*25;
+                  if(urgentCount>0)risk+=urgentCount*15;
+                  if(completedPct<0.5)risk+=20;
+                  risk=Math.min(risk,100);
+                  const riskLabel=risk>=60?"High Risk":risk>=30?"Moderate":"On Track";
+                  const riskColor=risk>=60?T.danger:risk>=30?T.caution:T.success;
+                  return(
+                    <div key={c.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:`1px solid ${T.border}`}}>
+                      <div style={{width:8,height:36,borderRadius:2,background:riskColor,flexShrink:0}}/>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:12,fontWeight:600}}>{c.name}</div>
+                        <div style={{fontSize:10,color:T.muted}}>
+                          {overdueCount>0&&<span style={{color:T.danger,marginRight:8}}>⚠ {overdueCount} overdue</span>}
+                          {urgentCount>0&&<span style={{color:T.caution,marginRight:8}}>⏰ {urgentCount} due soon</span>}
+                          {overdueCount===0&&urgentCount===0&&<span style={{color:T.success}}>✓ No urgent items</span>}
+                        </div>
+                      </div>
+                      <div style={{textAlign:"right",flexShrink:0}}>
+                        <div style={{fontSize:11,fontWeight:700,color:riskColor}}>{riskLabel}</div>
+                        <div style={{fontSize:9,color:T.faint}}>{100-risk}% healthy</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* ── Energy Trends ── */}
+              {energyLog.length>0&&(
+                <div className="card" style={{marginBottom:12}}>
+                  <div style={{fontSize:10,letterSpacing:2,color:T.accent,textTransform:"uppercase",marginBottom:12}}>Energy Trends — Last 14 Days</div>
+                  <div style={{display:"flex",gap:4,alignItems:"flex-end",height:60}}>
+                    {energyLog.slice(-14).map((e,i)=>{
+                      const cols=["#ef4444","#f97316","#eab308","#84cc16","#22c55e"];
+                      const h=(e.level/5)*100;
+                      return(
+                        <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                          <div style={{width:"100%",height:`${h}%`,minHeight:4,background:cols[e.level-1]||T.accent,borderRadius:"3px 3px 0 0",transition:"height .3s"}}/>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
+                    <span style={{fontSize:9,color:T.faint}}>14 days ago</span>
+                    <span style={{fontSize:9,color:T.faint}}>Today</span>
+                  </div>
+                  <div style={{fontSize:11,color:T.muted,marginTop:8,textAlign:"center"}}>
+                    Avg energy: {Math.round(energyLog.slice(-14).reduce((s,e)=>s+e.level,0)/Math.min(energyLog.length,14)*10)/10}/5
+                  </div>
+                </div>
+              )}
+
+            </div>
+          )}
+
           {view==="settings"&&(
             <div className="fi">
               <div style={{marginBottom:13}}><div style={{fontSize:10,letterSpacing:3,color:T.accent,textTransform:"uppercase"}}>Preferences</div><h1 style={{fontSize:22,fontWeight:700}}>Settings</h1></div>
@@ -2971,8 +3192,8 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
             </button>
           );
         })}
-        <button className={`tab-item${view==="settings"||view==="dissertation"||view==="flashcards"?" active":""}`} onClick={()=>setView(view==="settings"?"dashboard":"settings")}>
-          <span className="tab-item-icon">{view==="settings"||view==="dissertation"||view==="flashcards"?"✕":"⋯"}</span>
+        <button className={`tab-item${view==="settings"||view==="dissertation"||view==="flashcards"||view==="analytics"?" active":""}`} onClick={()=>setView(view==="settings"||view==="dissertation"||view==="flashcards"||view==="analytics"?"dashboard":"settings")}>
+          <span className="tab-item-icon">{view==="settings"||view==="dissertation"||view==="flashcards"||view==="analytics"?"✕":"⋯"}</span>
           <span>More</span>
         </button>
       </nav>
