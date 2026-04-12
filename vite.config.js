@@ -46,9 +46,10 @@ export default defineConfig({
             options: { cacheName: 'google-fonts-cache', expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 } },
           },
           {
-            // Never cache Supabase API calls — always fetch fresh data
+            // Short cache for Supabase — 5 min max to keep data fresh across devices
             urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
             handler: 'NetworkFirst',
+            options: { cacheName: 'supabase-cache', expiration: { maxEntries: 50, maxAgeSeconds: 300 } },
           },
         ],
       },
