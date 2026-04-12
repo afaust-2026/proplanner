@@ -59,7 +59,7 @@ const UNIVERSITIES=[
   // ── El Paso / South TX ───────────────────────────────────────────────────
   {id:"utep",   name:"UTEP",                  abbr:"UTEP", primary:"#FF8200",secondary:"#041E42",accent:"#041E42",logo:"⛏️", mascot:"Paydirt Pete the Miner"},
   // ── Custom ───────────────────────────────────────────────────────────────
-  {id:"custom", name:"Other / Custom",        abbr:"MY",   primary:"#6366f1",secondary:"#0ea5e9",accent:"#f59e0b",logo:"🎓", mascot:""},
+  {id:"custom", name:"My School",             abbr:"MY",   primary:"#3b4a6b",secondary:"#5c6e9a",accent:"#4f87c5",logo:"🎓", mascot:""},
 ];
 const DEGREE_LEVELS=[
   {id:"associates",label:"Associate's Degree",icon:"📗"},
@@ -363,7 +363,21 @@ function Onboarding({user,onComplete}){
         </div>
       ))}
     </div>
-    {nextBtn("Continue →")}
+    {/* Custom school name input — shows when Other is selected */}
+    {p.university==="custom"&&(
+      <div style={{marginTop:12,padding:"12px 14px",background:"rgba(59,74,107,.15)",border:"1px solid rgba(59,74,107,.4)",borderRadius:10}}>
+        <div style={{fontSize:11,color:"#7a7590",marginBottom:7}}>Enter your school name:</div>
+        <input
+          value={p.university_name||""}
+          onChange={e=>setP(x=>({...x,university_name:e.target.value}))}
+          placeholder="e.g. University of Texas at San Antonio"
+          style={{width:"100%",background:"#0f0f13",border:"1px solid #2a2a38",borderRadius:8,padding:"10px 12px",color:"#e8e3d8",fontSize:14,outline:"none",fontFamily:"inherit"}}
+          autoFocus
+        />
+        <div style={{fontSize:10,color:"#7a7590",marginTop:6}}>Your app will use a standard ProPlan Scholar theme.</div>
+      </div>
+    )}
+    {nextBtn("Continue →", p.university==="custom"&&!p.university_name)}
   </>);
 
   if(step===4)return wrap(<>
@@ -530,7 +544,8 @@ export default function ProPlanScholar(){
   const[showReflection,setShowReflection]=useState(false);
   const[weeklyReflection,setWeeklyReflection]=useState("");
 
-  const uni=UNIVERSITIES.find(u=>u.id===profile?.university)||UNIVERSITIES[0];
+  const uniRaw=UNIVERSITIES.find(u=>u.id===profile?.university)||UNIVERSITIES[0];
+  const uni={...uniRaw,name:profile?.university==="custom"&&profile?.university_name?profile.university_name:uniRaw.name,logo:profile?.university==="custom"?"🎓":uniRaw.logo};
   const T=buildTheme(profile?.university_primary||"#6366f1",dark);
   const rgb=hexToRgb(T.accent);
 
@@ -2560,7 +2575,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                   <div style={{fontWeight:700,marginBottom:10}}>Your Profile</div>
                   <div style={{display:"flex",flexDirection:"column",gap:8}}>
                     <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Name</div><input className="ifield" value={profile.full_name||""} onChange={e=>setProfile(p=>({...p,full_name:e.target.value}))} style={{fontSize:12}}/></div>
-                    {[["Degree",DEGREE_LEVELS.find(d=>d.id===profile.degree_level)?.label||"—"],["University",uni.name]].map(([k,v])=>(
+                    {[["Degree",DEGREE_LEVELS.find(d=>d.id===profile.degree_level)?.label||"—"],["University",profile.university==="custom"&&profile.university_name?profile.university_name:uni.name]].map(([k,v])=>(
                       <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${T.border}`,fontSize:12}}>
                         <span style={{color:T.muted}}>{k}</span><span style={{fontWeight:600}}>{v}</span>
                       </div>
