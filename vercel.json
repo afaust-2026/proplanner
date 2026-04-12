@@ -1,18 +1,62 @@
 {
   "routes": [
-    { "src": "/app", "dest": "/index.html" },
-    { "src": "/app/(.*)", "dest": "/index.html" },
-    { "src": "/privacy", "dest": "/privacy.html" },
-    { "src": "/terms", "dest": "/terms.html" },
-    { "src": "/assets/(.*)", "dest": "/assets/$1" },
-    { "src": "/(.*)\\.js", "dest": "/$1.js" },
-    { "src": "/(.*)\\.css", "dest": "/$1.css" },
-    { "src": "/", "dest": "/landing.html" }
+    {
+      "src": "/app",
+      "dest": "/index.html"
+    },
+    {
+      "src": "/app/(.*)",
+      "dest": "/index.html"
+    },
+    {
+      "src": "/privacy",
+      "dest": "/privacy.html"
+    },
+    {
+      "src": "/terms",
+      "dest": "/terms.html"
+    },
+    {
+      "src": "/assets/(.*)",
+      "dest": "/assets/$1"
+    },
+    {
+      "src": "/(.*)\\.js",
+      "dest": "/$1.js"
+    },
+    {
+      "src": "/(.*)\\.css",
+      "dest": "/$1.css"
+    },
+    {
+      "src": "/",
+      "dest": "/landing.html"
+    }
   ],
   "crons": [
     {
       "path": "/api/digest/send",
       "schedule": "0 23 * * 0"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/privacy",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/html; charset=utf-8"
+        }
+      ]
+    },
+    {
+      "source": "/terms",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/html; charset=utf-8"
+        }
+      ]
     }
   ]
 }
