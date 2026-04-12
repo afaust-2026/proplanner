@@ -2676,27 +2676,31 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                     <div>
                       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
                         <span style={{fontSize:20}}>📱</span>
-                        <div>
+                        <div style={{flex:1}}>
                           <div style={{fontWeight:600,fontSize:13}}>SMS Deadline Reminders</div>
-                          <span style={{fontSize:9,background:`rgba(${rgb},.15)`,color:T.accent,padding:"1px 6px",borderRadius:8,fontWeight:600,letterSpacing:.5}}>COMING IN V2</span>
+                          <div style={{fontSize:11,color:T.success,fontWeight:600}}>✓ Available now</div>
                         </div>
                       </div>
-                      <div style={{fontSize:12,color:T.muted,lineHeight:1.7,marginBottom:12}}>Get text message reminders 24 hours before assignments are due. Save your number now and we'll enable it when SMS launches.</div>
-                      <div style={{marginBottom:8}}>
+                      <div style={{fontSize:12,color:T.muted,lineHeight:1.7,marginBottom:12}}>Get text message reminders when assignments are coming up. Texts are sent every morning at 8 AM CT.</div>
+                      <div style={{marginBottom:12}}>
                         <div style={{fontSize:11,color:T.muted,marginBottom:5}}>Your mobile number</div>
                         <div style={{display:"flex",gap:8}}>
                           <input className="ifield" value={userPhone} onChange={e=>setUserPhone(e.target.value)} placeholder="+1 (555) 000-0000" style={{flex:1,fontSize:13}}/>
                           <button className="bp" style={{fontSize:12,padding:"10px 14px",flexShrink:0}} onClick={savePhone}>Save</button>
                         </div>
+                        {userPhone&&<div style={{fontSize:10,color:T.success,marginTop:5}}>✓ Number saved — you'll receive reminders at this number</div>}
                       </div>
                       <div style={{padding:"10px 12px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`}}>
-                        <div style={{fontSize:11,fontWeight:600,marginBottom:6}}>When SMS launches, you'll receive:</div>
-                        {[["24h before","Assignment due date reminders"],["1h before","Study session start alerts"],["Morning of","Daily schedule summary"],["Overdue alert","When something is past due"]].map(([t,d])=>(
-                          <div key={t} style={{display:"flex",gap:8,padding:"4px 0",borderBottom:`1px solid ${T.border}`,alignItems:"center"}}>
-                            <span style={{fontSize:10,fontWeight:700,color:T.accent,minWidth:80,flexShrink:0}}>{t}</span>
+                        <div style={{fontSize:11,fontWeight:600,marginBottom:6}}>You'll receive texts:</div>
+                        {[["3 days before","📚 Heads up reminder"],["1 day before","⚠️ Due tomorrow alert"],["Day of","🚨 Due today alert"]].map(([t,d])=>(
+                          <div key={t} style={{display:"flex",gap:8,padding:"5px 0",borderBottom:`1px solid ${T.border}`,alignItems:"center"}}>
+                            <span style={{fontSize:10,fontWeight:700,color:T.accent,minWidth:90,flexShrink:0}}>{t}</span>
                             <span style={{fontSize:11,color:T.muted}}>{d}</span>
                           </div>
                         ))}
+                      </div>
+                      <div style={{marginTop:10,padding:"8px 12px",background:`rgba(${rgb},.06)`,borderRadius:8,border:`1px solid rgba(${rgb},.15)`}}>
+                        <div style={{fontSize:11,color:T.muted}}>💡 To stop receiving texts, clear your phone number and tap Save.</div>
                       </div>
                     </div>
                   )}
