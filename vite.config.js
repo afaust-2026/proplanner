@@ -48,7 +48,7 @@ export default defineConfig({
           {
             // Never cache Supabase API calls — always fetch fresh data
             urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
-            handler: 'NetworkOnly',
+            handler: 'NetworkFirst',
           },
         ],
       },
