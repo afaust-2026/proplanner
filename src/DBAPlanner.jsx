@@ -719,11 +719,32 @@ export default function ProPlanScholar(){
 
   function generateStudyBlocks(){
     const blocks=[];
-    // dailyCount tracks number of sessions placed per day (max 2)
     const dailyCount={};
-    // dailyNextStart tracks the next available start hour per day
-    // so sessions don't overlap — each one starts where the last ended
     const dailyNextStart={};
+
+    // ── Degree level multiplier ───────────────────────────────────────────────
+    // Doctoral work requires significantly more preparation than undergraduate
+    const degreeMult={
+      associates:  0.8,
+      undergrad:   1.0,
+      graduate:    1.3,
+      doctoral:    1.6,
+      postdoc:     1.8,
+    }[profile?.degree_level] || 1.0;
+
+    // ── Assignment type multiplier ────────────────────────────────────────────
+    // Exams need extra prep; discussions/homework need less
+    function typeMult(type){
+      const map={
+        exam:        1.5, // all degree levels — exams always need more prep
+        paper:       1.3,
+        project:     1.2,
+        case:        1.1,
+        homework:    0.8,
+        discussion:  0.7,
+      };
+      return map[type?.toLowerCase()] || 1.0;
+    }
 
     const pendingAssignments=assignments.filter(a=>!a.done&&daysUntil(a.due)>=0).sort((a,b)=>new Date(a.due)-new Date(b.due));
 
@@ -731,7 +752,14 @@ export default function ProPlanScholar(){
       const course=courses.find(c=>c.id===assign.courseId);
       const profStats=course?.professor?getProfStats(course.professor,uni.name):null;
       const diff=profStats?Math.round((course.difficulty+profStats.difficulty)/2):course?.rmpData?Math.round((course.difficulty+rmpToInternal(course.rmpData.avgDifficulty))/2):course?.difficulty||3;
-      const adjustedHours=assign.estHours*(diff/3);
+
+      // Apply all three multipliers:
+      // 1. Course difficulty (1-5 scale normalized to 1.0 at diff=3)
+      // 2. Degree level (doctoral work needs more prep than undergrad)
+      // 3. Assignment type (exams need more prep than discussions)
+      const diffMult=diff/3;
+      const assignTypeMult=typeMult(assign.type);
+      const adjustedHours=assign.estHours * diffMult * degreeMult * assignTypeMult;
       const sessions=Math.ceil(adjustedHours/2);
       let placed=0;
       let checkDay=new Date();checkDay.setHours(0,0,0,0);
@@ -985,6 +1013,14 @@ Return ONLY a valid JSON object — no explanation, no markdown, no backticks. J
 
 For type use one of: paper, exam, case, homework, project, discussion.
 For difficulty use 1-5 (doctoral courses are typically 4-5).
+For estHours, estimate the BASE hours to complete the assignment (not including study/review time — that is calculated separately):
+  - Discussion posts: 1-2h
+  - Homework/quizzes: 1-3h
+  - Case studies: 2-4h
+  - Projects: 4-10h
+  - Papers/essays: 3-8h
+  - Exams (base study time before multipliers): 2-4h
+  - Doctoral dissertations/proposals: 8-20h
 Assume year ${new Date().getFullYear()} when no year is specified.
 If a due date is unclear, make your best guess based on context.
 Return ONLY the JSON object, nothing else.`}
@@ -1012,7 +1048,7 @@ Return ONLY the JSON object, nothing else.`}
         const text=await file.text();
         setUploadMsg("Analyzing with AI...");
         result=await callClaudeJSON(
-          `Parse this academic syllabus. Return ONLY valid JSON: {"courseName":"","professorName":"","difficulty":1-5,"classDays":["Mon","Wed"],"classTime":"18:00","classEndTime":"20:00","assignments":[{"title":"","due":"YYYY-MM-DD","type":"paper|exam|case|homework|project|discussion","estHours":1,"topics":"key topics or description"}]}. classDays uses Mon/Tue/Wed/Thu/Fri/Sat/Sun. classTime 24hr format. Assume year ${new Date().getFullYear()}.`,
+          `Parse this academic syllabus. Return ONLY valid JSON: {"courseName":"","professorName":"","difficulty":1-5,"classDays":["Mon","Wed"],"classTime":"18:00","classEndTime":"20:00","assignments":[{"title":"","due":"YYYY-MM-DD","type":"paper|exam|case|homework|project|discussion","estHours":2,"topics":"key topics or description"}]}. For estHours use BASE completion time only: discussion=1-2h, homework=1-3h, case=2-4h, project=4-10h, paper=3-8h, exam=2-4h, doctoral dissertation=8-20h. For difficulty: 1=very easy, 3=average, 5=very hard (doctoral courses typically 4-5). classDays uses Mon/Tue/Wed/Thu/Fri/Sat/Sun. classTime 24hr format. Assume year ${new Date().getFullYear()}.`,
           text.slice(0,3500)
         );
       }
@@ -2185,9 +2221,15 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
           {/* ── COURSES ── */}
           {view==="courses"&&(
             <div className="fi">
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:13}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:13,flexWrap:"wrap",gap:8}}>
                 <div><div style={{fontSize:10,letterSpacing:3,color:T.accent,textTransform:"uppercase"}}>Enrolled</div><h1 style={{fontSize:22,fontWeight:700}}>Courses</h1></div>
-                <button className="bp" onClick={()=>setShowAddCourse(true)}>+ Add Course</button>
+                <div style={{display:"flex",gap:8,flexShrink:0}}>
+                  <label style={{cursor:"pointer"}}>
+                    <input type="file" accept=".txt,.pdf,.docx" onChange={handleSyllabusUpload} style={{display:"none"}}/>
+                    <span className="bg2" style={{display:"inline-block",fontSize:13,padding:"8px 14px",borderRadius:9,whiteSpace:"nowrap"}}>{uploading?"Analyzing...":"📄 Upload Syllabus"}</span>
+                  </label>
+                  <button className="bp" onClick={()=>setShowAddCourse(true)}>+ Add Course</button>
+                </div>
               </div>
               {courses.length===0&&<div style={{color:T.faint,fontSize:13,padding:"20px",textAlign:"center"}}>No courses yet. Click Add Course or upload a syllabus to get started.</div>}
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(270px,1fr))",gap:12}}>
