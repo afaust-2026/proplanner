@@ -1677,6 +1677,8 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
     .course-grid{grid-template-columns:1fr!important;}
     .dash-grid{grid-template-columns:1fr!important;}
     .settings-grid{grid-template-columns:1fr!important;}
+    /* Chat panel full screen on mobile */
+    aside.fi{position:fixed!important;inset:0!important;width:100%!important;z-index:200!important;border-left:none!important;}
     /* Calendar: tighter cells on mobile */
     .cal-day{min-height:44px!important;padding:2px!important;border-radius:5px!important;}
     .cal-pill{font-size:7px!important;padding:1px 2px!important;}
@@ -3068,6 +3070,19 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                     </div>
                   )}
                 </div>
+                {/* Sign Out */}
+                <div className="card" style={{borderLeft:`3px solid ${T.danger}`}}>
+                  <div style={{fontWeight:700,marginBottom:6,color:T.danger}}>Account</div>
+                  <div style={{fontSize:12,color:T.muted,marginBottom:12}}>Signed in as {authUser?.email}</div>
+                  <button onClick={async()=>{
+                    await supabase.auth.signOut();
+                    setAuthUser(null);setProfile(null);setCourses([]);setAssignments([]);
+                    setMilestones([]);setScheduleBlocks([]);setTravelDates([]);setEnergyLog([]);
+                  }} style={{width:"100%",padding:"11px",borderRadius:9,border:`1px solid ${T.danger}`,background:"transparent",color:T.danger,fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>
+                    Sign Out
+                  </button>
+                </div>
+
                 <div className="card">
                   <div style={{fontWeight:700,marginBottom:7}}>Syllabus Import</div>
                   <div style={{fontSize:12,color:T.muted,marginBottom:10}}>AI extracts all assignments, due dates, professor names, and topics automatically.</div>
