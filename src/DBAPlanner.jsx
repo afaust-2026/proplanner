@@ -17,6 +17,7 @@ function getCalendarDays(yr,mo){const f=new Date(yr,mo,1).getDay(),tot=new Date(
 function dateKey(y,m,d){return`${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;}
 function today(){const d=new Date();return{year:d.getFullYear(),month:d.getMonth(),day:d.getDate()};}
 function daysUntil(due){const n=new Date();n.setHours(0,0,0,0);return Math.ceil((new Date(due+"T00:00:00")-n)/86400000);}
+function fmtDays(d){return d<0?`${Math.abs(d)}d overdue`:d===0?"Today":`${d}d`;}
 function urgencyColor(d,T){return d<0?T.danger:d<=3?T.warning:d<=7?T.caution:T.success;}
 function rmpToInternal(r){return Math.round(Math.min(5,Math.max(1,r||3)));}
 function to12h(t){
@@ -447,7 +448,7 @@ export default function ProPlanScholar(){
   const[view,setView]=useState(()=>{
     // Read initial view from URL hash so deep links work
     const hash=window.location.hash.replace("#","");
-    const validViews=["dashboard","calendar","assignments","courses","schedule","dissertation","flashcards","analytics","settings"];
+    const validViews=["dashboard","calendar","assignments","courses","schedule","major-project","flashcards","analytics","settings"];
     return validViews.includes(hash)?hash:"dashboard";
   });
   const[dark,setDark]=useState(()=>window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);
@@ -540,7 +541,7 @@ export default function ProPlanScholar(){
 
   // Confirmation modal state
   const[confirmModal,setConfirmModal]=useState(null); // {message, onConfirm, detail}
-  // Dissertation state
+  // Major Project state
   const[showReflection,setShowReflection]=useState(false);
   const[weeklyReflection,setWeeklyReflection]=useState("");
 
@@ -582,13 +583,18 @@ export default function ProPlanScholar(){
   useEffect(()=>{
     function onPopState(e){
       const hash=window.location.hash.replace("#","");
-      const validViews=["dashboard","calendar","assignments","courses","schedule","dissertation","flashcards","analytics","settings"];
+      const validViews=["dashboard","calendar","assignments","courses","schedule","major-project","flashcards","analytics","settings"];
       if(validViews.includes(hash))setView(hash);
       else setView("dashboard");
     }
     window.addEventListener("popstate",onPopState);
     return()=>window.removeEventListener("popstate",onPopState);
   },[]);
+
+  // Reset transient UI state when navigating between views
+  useEffect(()=>{
+    setCourses(prev=>prev.map(c=>c._editSched?{...c,_editSched:false}:c));
+  },[view]);
 
   useEffect(()=>{generateStudyBlocks();},[assignments,courses,workSched,travelDates,scheduleBlocks]);
   useEffect(()=>{chatEndRef.current?.scrollIntoView({behavior:"smooth"});},[chatMessages,chatOpen]);
@@ -1181,7 +1187,7 @@ Return ONLY the JSON object, nothing else.`}
     milestones.forEach(m=>{
       if(!m.due)return;
       events.push(["BEGIN:VEVENT",`UID:ms-${m.id}@academicplan.pro`,`DTSTAMP:${stamp()}`,
-        `DTSTART;VALUE=DATE:${icsDate(mDue)}`,`DTEND;VALUE=DATE:${icsDate(mDue)}`,
+        `DTSTART;VALUE=DATE:${icsDate(m.due)}`,`DTEND;VALUE=DATE:${icsDate(m.due)}`,
         `SUMMARY:⬟ ${esc(m.title)}`,m.notes?`DESCRIPTION:${esc(m.notes)}`:"",
         "CATEGORIES:MILESTONE",m.done?"STATUS:COMPLETED":"STATUS:CONFIRMED",
         "END:VEVENT"].filter(Boolean).join("\r\n"));
@@ -1356,10 +1362,15 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
   // ── Calendar ───────────────────────────────────────────────────────────────
   function getEventsForDay(y,m,d){
     const k=dateKey(y,m,d);const dayName=DAYS_SHORT[new Date(y,m,d).getDay()];
+    const isToday=y===t.year&&m===t.month&&d===t.day;
     // Find courses that meet on this day
     const classTimes=courses.filter(c=>(c.class_days||[]).includes(dayName)&&c.class_days?.length>0);
+    // Show assignments due on this date, plus overdue assignments on today's cell
+    const dayAsgn=isToday
+      ?assignments.filter(a=>a.due===k||(!a.done&&daysUntil(a.due)<0))
+      :assignments.filter(a=>a.due===k);
     return{
-      asgn:assignments.filter(a=>a.due===k),
+      asgn:dayAsgn,
       study:studyBlocks.filter(b=>b.date===k),
       travel:travelDates.find(tr=>k>=tr.start&&k<=tr.end),
       milestone:milestones.find(ms=>ms.due===k),
@@ -1448,7 +1459,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
     {id:"assignments",icon:"◉",label:"Assignments"},
     {id:"courses",icon:"◎",label:"Courses"},
     {id:"schedule",icon:"⊞",label:"My Schedule"},
-    {id:"dissertation",icon:"⬟",label:["doctoral","postdoc"].includes(profile?.degree_level)?"Dissertation":["graduate"].includes(profile?.degree_level)?"Thesis / Capstone":"Major Project"},
+    {id:"major-project",icon:"⬟",label:["doctoral","postdoc"].includes(profile?.degree_level)?"Dissertation":["graduate"].includes(profile?.degree_level)?"Thesis / Capstone":"Major Project"},
     {id:"flashcards",icon:"⬡",label:"Flashcards"},
     {id:"analytics",icon:"◑",label:"Analytics"},
     {id:"settings",icon:"◌",label:"Settings"},
@@ -1657,6 +1668,10 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
   .prog-bar{height:4px;background:${T.border};border-radius:2px;overflow:hidden;margin-bottom:4px;}
   .prog-fill{height:100%;border-radius:2px;transition:width .4s ease;}
 
+  /* ── Energy tooltip ─────────────────────────────────── */
+  .energy-tip-text{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:${dark?"#1e1e2e":"#333"};color:#fff;padding:6px 10px;border-radius:6px;font-size:11px;line-height:1.5;width:220px;text-align:center;z-index:99;white-space:normal;box-shadow:0 2px 8px rgba(0,0,0,.25);}
+  .energy-tip:hover .energy-tip-text,.energy-tip:focus .energy-tip-text{display:block;}
+
   /* ── Flashcards ───────────────────────────────────────── */
   .flip-card{perspective:1000px;cursor:pointer;}
   .flip-inner{position:relative;transform-style:preserve-3d;transition:transform .5s;}
@@ -1823,8 +1838,9 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
             </div>
             <button onClick={()=>setSidebar(o=>!o)} style={{background:T.hoverBg,border:`1px solid ${T.border2}`,borderRadius:8,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",color:T.muted,fontSize:12,flexShrink:0}}>←</button>
           </div>
-          {/* Nav items */}
-          <nav style={{flex:1,padding:"8px",display:"flex",flexDirection:"column",gap:2,overflowY:"auto"}}>
+          {/* Nav items + badges in scrollable region */}
+          <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column"}}>
+          <nav style={{padding:"8px",display:"flex",flexDirection:"column",gap:2}}>
             {NAV.map(item=>{
               const badge=item.id==="assignments"?overdue.length:item.id==="calendar"&&todayStudy.length>0?todayStudy.length:0;
               return(
@@ -1836,28 +1852,23 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
               );
             })}
           </nav>
-          {overdue.length>0&&<div style={{margin:"0 6px 6px",background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.3)",borderRadius:8,padding:"7px 8px",overflow:"hidden"}}>
+          {overdue.length>0&&<div onClick={()=>setView("assignments")} style={{margin:"0 6px 6px",background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.3)",borderRadius:8,padding:"7px 8px",overflow:"hidden",cursor:"pointer"}}>
             <div style={{fontSize:10,color:T.danger,fontWeight:700,whiteSpace:"nowrap"}}>⚠ {sidebarOpen?"OVERDUE":overdue.length}</div>
             {sidebarOpen&&<div style={{fontSize:11,color:T.danger,opacity:.8}}>{overdue.length} item{overdue.length>1?"s":""}</div>}
           </div>}
           {nextMilestone&&sidebarOpen&&<div style={{margin:"0 6px 6px",background:`rgba(${rgb},.08)`,border:`1px solid rgba(${rgb},.2)`,borderRadius:8,padding:"7px 9px"}}>
             <div style={{fontSize:9,color:T.accent,fontWeight:700,letterSpacing:1,textTransform:"uppercase"}}>Next Milestone</div>
             <div style={{fontSize:11,fontWeight:600,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nextMilestone.title}</div>
-            <div style={{fontSize:10,color:T.muted}}>{daysUntil(nextMilestone.due)}d away</div>
+            <div style={{fontSize:10,color:daysUntil(nextMilestone.due)<0?T.danger:T.muted}}>{daysUntil(nextMilestone.due)<0?`${Math.abs(daysUntil(nextMilestone.due))}d overdue`:`${daysUntil(nextMilestone.due)}d away`}</div>
           </div>}
-          <div style={{padding:"8px 6px",borderTop:`1px solid ${T.border}`,display:"flex",flexDirection:"column",gap:4}}>
-            <button onClick={async()=>{const nd=!dark;setDark(nd);await supabase.from("profiles").update({dark_mode:nd}).eq("id",authUser.id);}} className="nb" style={{justifyContent:sidebarOpen?"flex-start":"center",color:T.muted,border:`1px solid ${T.border2}`,borderRadius:8,padding:"6px 9px"}}>
-              <span style={{fontSize:14}}>{dark?"☀️":"🌙"}</span>
-              {sidebarOpen&&<span style={{fontSize:12,whiteSpace:"nowrap"}}>{dark?"Light Mode":"Dark Mode"}</span>}
-            </button>
-            <button onClick={()=>setChatOpen(o=>!o)} className="nb" style={{justifyContent:sidebarOpen?"flex-start":"center",background:chatOpen?`rgba(${rgb},.12)`:"transparent",border:`1px solid ${chatOpen?T.accent:T.border2}`,borderRadius:8,padding:"6px 9px",color:chatOpen?T.accent:T.muted}}>
-              <span style={{fontSize:14}}>🤖</span>
-              {sidebarOpen&&<span style={{fontSize:12,whiteSpace:"nowrap"}}>AI Assistant</span>}
-            </button>
-            <div style={{padding:"8px",display:"flex",flexDirection:"column",gap:4,borderTop:`1px solid ${T.border}`}}>
+          </div>
+          <div style={{padding:"8px 6px",borderTop:`1px solid ${T.border}`,display:"flex",flexDirection:"column",gap:4,flexShrink:0}}>
             <div style={{display:"flex",gap:6}}>
               <button onClick={()=>setChatOpen(o=>!o)} className="nb" style={{flex:1,justifyContent:"center",background:chatOpen?`rgba(${rgb},.12)`:"transparent",border:`1px solid ${chatOpen?T.accent:T.border2}`,color:chatOpen?T.accent:T.muted,borderRadius:10,minHeight:36}}>
-                <span style={{fontSize:14}}>💬</span><span style={{fontSize:12}}>AI Chat</span>
+                <span style={{fontSize:14}}>💬</span>{sidebarOpen&&<span style={{fontSize:12}}>AI Chat</span>}
+              </button>
+              <button onClick={()=>setView("settings")} className="nb" style={{width:36,flexShrink:0,justifyContent:"center",border:`1px solid ${view==="settings"?T.accent:T.border2}`,color:view==="settings"?T.accent:T.muted,borderRadius:10,minHeight:36,padding:0}}>
+                <span style={{fontSize:14}}>⚙</span>
               </button>
               <button onClick={async()=>{const nd=!dark;setDark(nd);await supabase?.from("profiles").update({dark_mode:nd}).eq("id",authUser.id);}} className="nb" style={{width:36,flexShrink:0,justifyContent:"center",border:`1px solid ${T.border2}`,borderRadius:10,minHeight:36,padding:0}}>
                 <span style={{fontSize:14}}>{dark?"☀️":"🌙"}</span>
@@ -1865,7 +1876,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
             </div>
             <button onClick={async()=>{await supabase.auth.signOut();setAuthUser(null);setProfile(null);setCourses([]);setAssignments([]);setMilestones([]);setScheduleBlocks([]);setTravelDates([]);setEnergyLog([]);}} className="nb" style={{justifyContent:"flex-start",color:T.faint,borderRadius:10,padding:"8px 10px",fontSize:13}}>
               <span style={{fontSize:14}}>↩</span>
-              <span style={{fontSize:13,whiteSpace:"nowrap"}}>Sign Out</span>
+              {sidebarOpen&&<span style={{fontSize:13,whiteSpace:"nowrap"}}>Sign Out</span>}
             </button>
             <div style={{display:"flex",gap:14,padding:"4px 4px 0"}}>
               <a href="/privacy" target="_blank" rel="noreferrer" style={{fontSize:10,color:T.faint,textDecoration:"none"}}>Privacy</a>
@@ -1873,7 +1884,6 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
               <span style={{fontSize:10,color:T.faint}}>© 2026</span>
             </div>
           </div>
-        </div>
         </aside>
 
         {/* ═══ MAIN CONTENT ═══ */}
@@ -1910,7 +1920,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                 </div>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:10,marginBottom:14}}>
-                {[{l:"Courses",v:courses.length,c:T.accent,nav:"courses"},{l:"Pending",v:assignments.filter(a=>!a.done).length,c:T.warning,nav:"assignments"},{l:"Study Hrs Complete",v:Object.keys(completedStudy).filter(k=>completedStudy[k]).length*2,c:"#0ea5e9",nav:"calendar"},{l:"Milestones",v:milestones.filter(m=>!m.done).length,c:"#a78bfa",nav:"dissertation"},{l:"Done",v:assignments.filter(a=>a.done).length,c:T.success,nav:"assignments"}].map(s=>(
+                {[{l:"Courses",v:courses.length,c:T.accent,nav:"courses"},{l:"Pending",v:assignments.filter(a=>!a.done).length,c:T.warning,nav:"assignments"},{l:"Study Hrs Complete",v:Object.keys(completedStudy).filter(k=>completedStudy[k]).length*2,c:"#0ea5e9",nav:"calendar"},{l:"Milestones",v:milestones.filter(m=>!m.done).length,c:"#a78bfa",nav:"major-project"},{l:"Done",v:assignments.filter(a=>a.done).length,c:T.success,nav:"assignments"}].map(s=>(
                   <div key={s.l} className="card stat-card" onClick={()=>setView(s.nav)} title={`Go to ${s.nav}`} style={{textAlign:"center",borderTop:`2px solid ${s.c}`,minWidth:90,flexShrink:0}}>
                     <div style={{fontSize:26,fontWeight:700,color:s.c}}>{s.v}</div>
                     <div style={{fontSize:9,color:T.muted,marginTop:2,letterSpacing:1,textTransform:"uppercase"}}>{s.l}</div>
@@ -2026,7 +2036,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                   <div style={{marginTop:9,padding:9,background:T.subcard,borderRadius:8,border:`1px solid ${T.border2}`}}>
                     <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:6}}>
                       <div style={{fontSize:10,color:T.muted,letterSpacing:1,textTransform:"uppercase"}}>Today's Energy Level</div>
-                      <span title="Log your energy daily. The AI uses this to suggest better study times and adapt your schedule." style={{fontSize:11,color:T.faint,cursor:"help"}}>ⓘ</span>
+                      <span className="energy-tip" style={{fontSize:11,color:T.faint,cursor:"help",position:"relative"}}>ⓘ<span className="energy-tip-text">Log your energy daily. The AI uses this to suggest better study times and adapt your schedule.</span></span>
                     </div>
                     <div style={{display:"flex",gap:5}}>
                       {[1,2,3,4,5].map(lvl=>{const cols=["#ef4444","#f97316","#eab308","#84cc16","#22c55e"];const emojis=["😴","😓","😐","😊","🚀"];const active=todayEnergy===lvl;return(
@@ -2043,7 +2053,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                     <div style={{fontWeight:600,fontSize:13,marginBottom:2}}>{nextMilestone.title}</div>
                     <div style={{fontSize:11,color:T.muted,marginBottom:6}}>{nextMilestone.notes}</div>
                     <div className="prog-bar"><div className="prog-fill" style={{width:`${Math.round(milestones.filter(m=>m.done).length/Math.max(milestones.length,1)*100)}%`,background:T.accent}}/></div>
-                    <div style={{fontSize:11,color:T.muted,marginTop:4}}>{milestones.filter(m=>m.done).length}/{milestones.length} milestones · {daysUntil(nextMilestone.due)}d to next</div>
+                    <div style={{fontSize:11,color:T.muted,marginTop:4}}>{milestones.filter(m=>m.done).length}/{milestones.length} milestones · {daysUntil(nextMilestone.due)<0?<span style={{color:T.danger}}>{Math.abs(daysUntil(nextMilestone.due))}d overdue</span>:`${daysUntil(nextMilestone.due)}d to next`}</div>
                   </>):<div style={{color:T.faint,fontSize:12}}>Add milestones in the {["doctoral","postdoc"].includes(profile?.degree_level)?"Dissertation":"Major Projects & Presentations"} tab.</div>}
                 </div>
                 <div className="card">
@@ -2096,7 +2106,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                     <div key={i} onClick={()=>setSelectedDay(isSel?null:day)} className="cal-day" style={{background:travel?(dark?"#1a1510":"#fff8ee"):isSel?(dark?"#1e1e35":"#ebebff"):isToday?(dark?"#16162a":"#f0f0ff"):(dark?"#12121a":T.card),border:`1px solid ${isToday?T.accent:T.border}`}}>
                       <div style={{fontSize:11,fontWeight:isToday?700:400,color:isToday?T.accent:T.text,marginBottom:2}}>{day}{travel&&" ✈"}</div>
                       {classes.map(c=><div key={c.id} className="cal-pill" style={{background:"rgba(16,185,129,.2)",color:"#10b981"}}>🎓 {c.name.length>8?c.name.slice(0,8)+"…":c.name}</div>)}
-                      {asgn.map(a=>{const col=courses.find(c=>c.id===a.courseId)?.color||T.accent;return(<div key={a.id} className="cal-pill" style={{background:`rgba(${hexToRgb(col)},.2)`,color:col}}>📌 {a.title.length>8?a.title.slice(0,8)+"…":a.title}</div>);})}
+                      {asgn.map(a=>{const col=(!a.done&&daysUntil(a.due)<0)?T.danger:courses.find(c=>c.id===a.courseId)?.color||T.accent;return(<div key={a.id} className="cal-pill" style={{background:`rgba(${hexToRgb(col)},.2)`,color:col}}>{(!a.done&&daysUntil(a.due)<0)?"⚠":"📌"} {a.title.length>8?a.title.slice(0,8)+"…":a.title}</div>);})}
                       {study.slice(0,2).map(b=>{const done=completedStudy[b.id];const bCourse=courses.find(c=>c.id===b.courseId);return(<div key={b.id} className="cal-pill" style={{background:done?`rgba(${hexToRgb(bCourse?.color||"34,197,94")},.15)`:`rgba(${hexToRgb(bCourse?.color||"14,165,233")},.2)`,color:done?"#22c55e":bCourse?.color||"#38bdf8",textDecoration:done?"line-through":"none"}}>📚 {to12h(b.startTime)}</div>);})}
                       {milestone&&<div className="cal-pill" style={{background:"rgba(167,139,250,.2)",color:"#a78bfa"}}>⬟ {milestone.title.length>6?milestone.title.slice(0,6)+"…":milestone.title}</div>}
                       {study.length>2&&<div style={{fontSize:7,color:T.faint}}>+{study.length-2} more</div>}
@@ -2381,7 +2391,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                     })()}
                     <div className="prog-bar" style={{marginBottom:5}}><div className="prog-fill" style={{width:`${pct}%`,background:c.color}}/></div>
                     <div style={{fontSize:10,color:T.muted,marginBottom:next?7:0}}>{done}/{total} complete · {"★".repeat(c.difficulty)}{"☆".repeat(5-c.difficulty)}</div>
-                    {next&&<div style={{fontSize:11,padding:"5px 8px",background:T.subcard,borderRadius:6}}>Next: <span style={{color:c.color,fontWeight:600}}>{next.title}</span> · {daysUntil(next.due)}d</div>}
+                    {next&&(()=>{const d=daysUntil(next.due);return(<div style={{fontSize:11,padding:"5px 8px",background:T.subcard,borderRadius:6}}>Next: <span style={{color:c.color,fontWeight:600}}>{next.title}</span> · {d<0?<span style={{color:T.danger}}>{Math.abs(d)}d overdue</span>:`${d}d`}</div>);})()}
                   </div>);
                 })}
               </div>
@@ -2501,8 +2511,8 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
             </div>
           )}
 
-          {/* ── DISSERTATION ── */}
-          {view==="dissertation"&&(
+          {/* ── MAJOR PROJECT ── */}
+          {view==="major-project"&&(
             <div className="fi">
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:13}}>
                 <div><div style={{fontSize:10,letterSpacing:3,color:T.accent,textTransform:"uppercase"}}>{["doctoral","postdoc"].includes(profile?.degree_level)?"Doctoral Journey":"Academic Journey"}</div><h1 style={{fontSize:22,fontWeight:700}}>{["doctoral","postdoc"].includes(profile?.degree_level)?"Dissertation Tracker":["graduate"].includes(profile?.degree_level)?"Thesis & Capstone Tracker":"Major Project Tracker"}</h1></div>
@@ -2541,7 +2551,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
               {showReflection&&(
                 <div className="card fi" style={{marginTop:12,border:`1px solid rgba(${rgb},.25)`}}>
                   <div style={{fontWeight:700,marginBottom:8}}>📝 Weekly Reflection</div>
-                  <div style={{fontSize:12,color:T.muted,marginBottom:10}}>Reflecting weekly improves doctoral outcomes. What did you accomplish? What is blocking you? What will you focus on next week?</div>
+                  <div style={{fontSize:12,color:T.muted,marginBottom:10}}>Reflecting weekly improves academic outcomes. What did you accomplish? What is blocking you? What will you focus on next week?</div>
                   <textarea className="ifield" rows={4} placeholder="This week I made progress on... A challenge I am facing is... Next week I will focus on..." value={weeklyReflection} onChange={e=>setWeeklyReflection(e.target.value)} style={{resize:"vertical",fontSize:12,marginBottom:10}}/>
                   <div style={{display:"flex",gap:8}}>
                     <button className="bp" style={{fontSize:12}} onClick={async()=>{
@@ -3017,7 +3027,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                       <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
                         <div>
                           <div style={{fontSize:11,color:T.muted,marginBottom:4}}>Your Canvas URL</div>
-                          <input className="ifield" value={canvasUrl} onChange={e=>setCanvasUrl(e.target.value)} placeholder="https://utdallas.instructure.com" style={{fontSize:13}}/>
+                          <input className="ifield" value={canvasUrl} onChange={e=>setCanvasUrl(e.target.value)} placeholder="https://yourschool.instructure.com" style={{fontSize:13}}/>
                         </div>
                         <div>
                           <div style={{fontSize:11,color:T.muted,marginBottom:4}}>Canvas API Token</div>
@@ -3059,7 +3069,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                       </div>
                       <div style={{padding:"10px 12px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`,marginBottom:12}}>
                         <div style={{fontSize:11,fontWeight:600,marginBottom:8}}>Each email includes:</div>
-                        {[["📊","At-a-glance stats","Courses, pending, study hours, completed"],["⚠️","Overdue alerts","Any past-due assignments flagged immediately"],["📌","Upcoming deadlines","Next 14 days sorted by urgency"],["📚","Study schedule","This week's sessions with exact times"],["⬟","Next milestone","Your dissertation or major project progress"]].map(([icon,t,d])=>(
+                        {[["📊","At-a-glance stats","Courses, pending, study hours, completed"],["⚠️","Overdue alerts","Any past-due assignments flagged immediately"],["📌","Upcoming deadlines","Next 14 days sorted by urgency"],["📚","Study schedule","This week's sessions with exact times"],["⬟","Next milestone","Your major project or milestone progress"]].map(([icon,t,d])=>(
                           <div key={t} style={{display:"flex",gap:10,padding:"5px 0",borderBottom:`1px solid ${T.border}`,alignItems:"flex-start"}}>
                             <span style={{fontSize:14,flexShrink:0}}>{icon}</span>
                             <div><div style={{fontSize:12,fontWeight:600}}>{t}</div><div style={{fontSize:10,color:T.muted}}>{d}</div></div>
@@ -3108,7 +3118,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
               <button onClick={()=>setChatOpen(false)} style={{background:"transparent",border:`1px solid ${T.border2}`,borderRadius:7,width:25,height:25,color:T.muted,fontSize:11}}>✕</button>
             </div>
             <div style={{padding:"7px 10px",borderBottom:`1px solid ${T.border}`,display:"flex",gap:4,flexWrap:"wrap"}}>
-              {["Soonest deadline?","Study strategy","Prioritize my week","Dissertation advice","How am I doing?"].map(q=>(
+              {["Soonest deadline?","Study strategy","Prioritize my week","Major project advice","How am I doing?"].map(q=>(
                 <button key={q} onClick={()=>sendChat(q)} style={{fontSize:10,padding:"2px 7px",borderRadius:20,background:dark?"#1e1e30":T.border,border:`1px solid ${T.border2}`,color:T.muted,cursor:"pointer"}}>{q}</button>
               ))}
             </div>
@@ -3181,11 +3191,11 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
       </div></div>)}
 
       {showAddMilestone&&(<div className="mo" onClick={()=>setShowAddMilestone(false)}><div className="md fi" onClick={e=>e.stopPropagation()}>
-        <div style={{fontWeight:700,fontSize:16,marginBottom:13}}>Add Dissertation Milestone</div>
+        <div style={{fontWeight:700,fontSize:16,marginBottom:13}}>Add Milestone</div>
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
           <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Title</div><input className="ifield" placeholder="e.g. Proposal Defense" value={newMilestone.title} onChange={e=>setNewMilestone(m=>({...m,title:e.target.value}))}/></div>
           <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Target Date</div><input type="date" className="ifield" value={newMilestone.due} onChange={e=>setNewMilestone(m=>({...m,due:e.target.value}))}/></div>
-          <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Notes</div><textarea className="ifield" rows={2} placeholder="Advisor requirements, committee notes..." value={newMilestone.notes} onChange={e=>setNewMilestone(m=>({...m,notes:e.target.value}))} style={{resize:"vertical"}}/></div>
+          <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Notes</div><textarea className="ifield" rows={2} placeholder="Requirements, key deliverables, notes..." value={newMilestone.notes} onChange={e=>setNewMilestone(m=>({...m,notes:e.target.value}))} style={{resize:"vertical"}}/></div>
           <div style={{display:"flex",gap:8,marginTop:4}}><button className="bg2" style={{flex:1}} onClick={()=>setShowAddMilestone(false)}>Cancel</button><button className="bp" style={{flex:1}} onClick={addMilestone}>Add Milestone</button></div>
         </div>
       </div></div>)}
@@ -3265,7 +3275,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
             </div>
           </div>
           <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Estimated Hours: {editAssign.estHours}</div><input type="range" min={1} max={30} value={editAssign.estHours} onChange={e=>setEditAssign(a=>({...a,estHours:+e.target.value}))} style={{width:"100%",accentColor:T.accent}}/></div>
-          <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Notes / Topics</div><textarea className="ifield" rows={2} value={editAssign.topics||""} onChange={e=>setEditAssign(a=>({...a,topics:e.target.value}))} style={{resize:"vertical",fontSize:12}} placeholder="Key topics, notes for flashcards..."/></div>
+          <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Description / Notes <span style={{color:T.faint}}>(optional)</span></div><textarea className="ifield" rows={2} value={editAssign.topics||""} onChange={e=>setEditAssign(a=>({...a,topics:e.target.value}))} style={{resize:"vertical",fontSize:12}} placeholder="Key topics, requirements, what to focus on..."/></div>
           <div style={{display:"flex",gap:8,marginTop:4}}><button className="bg2" style={{flex:1}} onClick={()=>setEditAssign(null)}>Cancel</button><button className="bp" style={{flex:1}} onClick={saveEditAssignment}>Save Changes</button></div>
         </div>
       </div></div>)}
@@ -3282,8 +3292,8 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
             </button>
           );
         })}
-        <button className={`tab-item${view==="settings"||view==="dissertation"||view==="flashcards"||view==="analytics"?" active":""}`} onClick={()=>setView(view==="settings"||view==="dissertation"||view==="flashcards"||view==="analytics"?"dashboard":"settings")}>
-          <span className="tab-item-icon">{view==="settings"||view==="dissertation"||view==="flashcards"||view==="analytics"?"✕":"⋯"}</span>
+        <button className={`tab-item${view==="settings"||view==="major-project"||view==="flashcards"||view==="analytics"?" active":""}`} onClick={()=>setView(view==="settings"||view==="major-project"||view==="flashcards"||view==="analytics"?"dashboard":"settings")}>
+          <span className="tab-item-icon">{view==="settings"||view==="major-project"||view==="flashcards"||view==="analytics"?"✕":"⋯"}</span>
           <span>More</span>
         </button>
       </nav>
