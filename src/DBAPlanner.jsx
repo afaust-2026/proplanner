@@ -1483,6 +1483,9 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
   @keyframes slideUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
   @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
   @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.5;}}
+  @keyframes energyPop{0%{transform:scale(1);}40%{transform:scale(1.3);}100%{transform:scale(1);}}
+  @keyframes fadeSlideIn{from{opacity:0;transform:translateX(-6px);}to{opacity:1;transform:translateX(0);}}
+  .energy-pop{animation:energyPop .3s ease;}
 
   /* ── Layout primitives ────────────────────────────────── */
   .fi{animation:fi .25s ease;}
@@ -2040,8 +2043,9 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                     </div>
                     <div style={{display:"flex",gap:5}}>
                       {[1,2,3,4,5].map(lvl=>{const cols=["#ef4444","#f97316","#eab308","#84cc16","#22c55e"];const emojis=["😴","😓","😐","😊","🚀"];const active=todayEnergy===lvl;return(
-                        <button key={lvl} onClick={()=>logEnergy(lvl)} style={{width:30,height:30,borderRadius:"50%",border:`2px solid ${active?cols[lvl-1]:T.border2}`,background:active?cols[lvl-1]+"33":"transparent",fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{emojis[lvl-1]}</button>
+                        <button key={lvl} onClick={()=>logEnergy(lvl)} className={active?"energy-pop":""} style={{width:30,height:30,borderRadius:"50%",border:`2px solid ${active?cols[lvl-1]:T.border2}`,background:active?cols[lvl-1]+"33":"transparent",fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .2s ease",boxShadow:active?`0 0 10px ${cols[lvl-1]}44`:""}}>{emojis[lvl-1]}</button>
                       );})}
+                      {todayEnergy&&<span style={{fontSize:10,color:T.success,marginLeft:4,alignSelf:"center",animation:"fadeSlideIn .3s ease"}}>✓ Logged</span>}
                     </div>
                   </div>
                 </div>
@@ -2132,7 +2136,16 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                       </div>
                     ))}
                     {blocks.map(b=><div key={b.id} style={{fontSize:11,color:T.muted,marginBottom:3}}>⊞ {b.label} ({to12h(b.start_time)}–{to12h(b.end_time)})</div>)}
-                    {asgn.length===0&&study.length===0&&!travel&&!milestone&&blocks.length===0&&<div style={{color:T.faint}}>Nothing scheduled.</div>}
+                    {asgn.length===0&&study.length===0&&!travel&&!milestone&&blocks.length===0&&classes.length===0&&(
+                      <div style={{textAlign:"center",padding:"10px 0"}}>
+                        <div style={{fontSize:20,marginBottom:4}}>{calYear===t.year&&calMonth===t.month&&selectedDay===t.day?"📭":"📅"}</div>
+                        <div style={{color:T.faint,fontSize:12,marginBottom:8}}>Nothing scheduled{calYear===t.year&&calMonth===t.month&&selectedDay===t.day?" today":""}.</div>
+                        <div style={{display:"flex",gap:6,justifyContent:"center"}}>
+                          <button onClick={()=>{setView("assignments");setShowAddAssign(true);}} className="bg2" style={{fontSize:11,padding:"5px 10px",borderRadius:6}}>+ Assignment</button>
+                          <button onClick={()=>setView("schedule")} className="bg2" style={{fontSize:11,padding:"5px 10px",borderRadius:6}}>+ Time Block</button>
+                        </div>
+                      </div>
+                    )}
                     {asgn.map(a=>{const c=courses.find(x=>x.id===a.courseId);return(<div key={a.id} style={{display:"flex",gap:8,padding:"5px 0",borderBottom:`1px solid ${T.border}`,alignItems:"center"}}><span style={{color:c?.color,fontSize:12}}>📌</span><div style={{flex:1}}><div style={{fontWeight:600,fontSize:12}}>{a.title}</div><div style={{fontSize:10,color:T.muted}}>{c?.name}</div></div></div>);})}
                     {study.map(b=>{const done=completedStudy[b.id];const course=courses.find(c=>c.id===b.courseId);return(
                       <div key={b.id} style={{display:"flex",gap:8,padding:"7px 0",borderBottom:`1px solid ${T.border}`,alignItems:"center",opacity:done?.6:1}}>
@@ -2391,7 +2404,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                     })()}
                     <div className="prog-bar" style={{marginBottom:5}}><div className="prog-fill" style={{width:`${pct}%`,background:c.color}}/></div>
                     <div style={{fontSize:10,color:T.muted,marginBottom:next?7:0}}>{done}/{total} complete · {"★".repeat(c.difficulty)}{"☆".repeat(5-c.difficulty)}</div>
-                    {next&&(()=>{const d=daysUntil(next.due);return(<div style={{fontSize:11,padding:"5px 8px",background:T.subcard,borderRadius:6}}>Next: <span style={{color:c.color,fontWeight:600}}>{next.title}</span> · {d<0?<span style={{color:T.danger}}>{Math.abs(d)}d overdue</span>:`${d}d`}</div>);})()}
+                    {next&&(()=>{const d=daysUntil(next.due);return(<div onClick={()=>setEditAssign({...next})} style={{fontSize:11,padding:"5px 8px",background:T.subcard,borderRadius:6,cursor:"pointer",transition:"background .2s"}}>Next: <span style={{color:c.color,fontWeight:600,textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:2}}>{next.title}</span> · {d<0?<span style={{color:T.danger}}>{Math.abs(d)}d overdue</span>:`${d}d`}</div>);})()}
                   </div>);
                 })}
               </div>
