@@ -28,6 +28,24 @@ function to12h(t){
   return m===0?`${h12} ${ampm}`:`${h12}:${String(m).padStart(2,"0")} ${ampm}`;
 }
 function hexToRgb(hex){try{const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return`${r},${g},${b}`;}catch{return"99,102,241";}}
+function calcGPA(grades, courses, assignments){
+  // Calculate per-course percentage, then map to 4.0 scale
+  const courseGrades={};
+  grades.forEach(g=>{
+    if(!courseGrades[g.courseId])courseGrades[g.courseId]={totalScore:0,totalMax:0};
+    courseGrades[g.courseId].totalScore+=g.score;
+    courseGrades[g.courseId].totalMax+=g.maxScore;
+  });
+  const gpas=Object.entries(courseGrades).map(([cid,{totalScore,totalMax}])=>{
+    const pct=totalMax>0?(totalScore/totalMax)*100:0;
+    // Standard percentage to GPA: 93+=4.0, 90+=3.7, 87+=3.3, 83+=3.0, 80+=2.7, 77+=2.3, 73+=2.0, 70+=1.7, 67+=1.3, 63+=1.0, 60+=0.7, <60=0.0
+    let gpa=0;
+    if(pct>=93)gpa=4.0;else if(pct>=90)gpa=3.7;else if(pct>=87)gpa=3.3;else if(pct>=83)gpa=3.0;else if(pct>=80)gpa=2.7;else if(pct>=77)gpa=2.3;else if(pct>=73)gpa=2.0;else if(pct>=70)gpa=1.7;else if(pct>=67)gpa=1.3;else if(pct>=63)gpa=1.0;else if(pct>=60)gpa=0.7;else gpa=0.0;
+    return{courseId:cid,pct,gpa};
+  });
+  const overall=gpas.length>0?gpas.reduce((s,g)=>s+g.gpa,0)/gpas.length:0;
+  return{courseGrades:gpas,overall:Math.round(overall*100)/100};
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const UNIVERSITIES=[
@@ -545,6 +563,20 @@ export default function ProPlanScholar(){
   const[showReflection,setShowReflection]=useState(false);
   const[weeklyReflection,setWeeklyReflection]=useState("");
 
+  // Grade tracking state
+  const[grades,setGrades]=useState([]); // [{id, assignmentId, courseId, score, maxScore}]
+  const[showGradeModal,setShowGradeModal]=useState(null); // assignment to grade
+  const[gradeInput,setGradeInput]=useState({score:"",maxScore:100}); // controlled inputs for grade modal
+  const[gpaTarget,setGpaTarget]=useState(null); // target GPA for what-if calculator
+
+  // Focus timer state
+  const[focusTimer,setFocusTimer]=useState(null); // {blockId, blockTitle, courseColor, startedAt, duration, remaining, isPaused, breakMode}
+  const focusInterval=useRef(null);
+
+  // Streak state
+  const[studyStreak,setStudyStreak]=useState(0);
+  const[longestStreak,setLongestStreak]=useState(0);
+
   const uniRaw=UNIVERSITIES.find(u=>u.id===profile?.university)||UNIVERSITIES[0];
   const uni={...uniRaw,name:profile?.university==="custom"&&profile?.university_name?profile.university_name:uniRaw.name,logo:profile?.university==="custom"?"🎓":uniRaw.logo};
   // Feature gating — plan is "free" until Stripe sets it to "pro"
@@ -599,6 +631,33 @@ export default function ProPlanScholar(){
   useEffect(()=>{generateStudyBlocks();},[assignments,courses,workSched,travelDates,scheduleBlocks]);
   useEffect(()=>{chatEndRef.current?.scrollIntoView({behavior:"smooth"});},[chatMessages,chatOpen]);
 
+  useEffect(()=>{
+    // Calculate current streak: consecutive days with at least one completed study block
+    const completedDates=new Set();
+    studyBlocks.forEach(b=>{if(completedStudy[b.id])completedDates.add(b.date);});
+    // Also count days where energy was logged as activity
+    energyLog.forEach(e=>completedDates.add(e.date));
+    const todayStr=dateKey(t.year,t.month,t.day);
+    const yesterdayD=new Date();yesterdayD.setDate(yesterdayD.getDate()-1);
+    const yesterdayStr=dateKey(yesterdayD.getFullYear(),yesterdayD.getMonth(),yesterdayD.getDate());
+
+    let streak=0;
+    // Start counting from today or yesterday
+    let checkDate=new Date();
+    if(!completedDates.has(todayStr)){
+      // If nothing today, streak can still be alive if yesterday was active
+      if(!completedDates.has(yesterdayStr)){setStudyStreak(0);return;}
+      checkDate.setDate(checkDate.getDate()-1);
+    }
+    while(true){
+      const ds=dateKey(checkDate.getFullYear(),checkDate.getMonth(),checkDate.getDate());
+      if(completedDates.has(ds)){streak++;checkDate.setDate(checkDate.getDate()-1);}
+      else break;
+    }
+    setStudyStreak(streak);
+    setLongestStreak(prev=>Math.max(prev,streak));
+  },[completedStudy,studyBlocks,energyLog]);
+
   async function loadProfile(){
     const{data}=await supabase.from("profiles").select("*").eq("id",authUser.id).single();
     if(data){setProfile(data);if(data.dark_mode!==undefined)setDark(data.dark_mode);if(data.phone)setUserPhone(data.phone);if(data.canvas_url)setCanvasUrl(data.canvas_url);if(data.work_schedule&&typeof data.work_schedule==='object')setWorkSched(ws=>({...ws,...data.work_schedule}));}
@@ -616,6 +675,9 @@ export default function ProPlanScholar(){
       supabase.from("energy_log").select("*").eq("user_id",uid),
       supabase.from("professor_ratings").select("*").order("created_at",{ascending:false}),
     ]);
+    // Grades table loaded separately so a missing table doesn't break everything
+    let gr={data:null};
+    try{gr=await supabase.from("grades").select("*").eq("user_id",uid);}catch(e){/* grades table may not exist yet */}
     if(c.data)setCourses(c.data.map(x=>({...x,rmpData:x.rmp_data})));
     if(a.data)setAssignments(a.data.map(x=>({...x,courseId:x.course_id,due:x.due_date,estHours:x.est_hours,flashcards:x.flashcards||[]})));
     if(m.data)setMilestones(m.data.map(x=>({...x,due:x.due_date})));
@@ -623,6 +685,7 @@ export default function ProPlanScholar(){
     if(td.data)setTravelDates(td.data.map(x=>({...x,start:x.start_date,end:x.end_date})));
     if(el.data)setEnergyLog(el.data.map(x=>({date:x.log_date,level:x.level})));
     if(pr.data)setProfRatings(pr.data);
+    if(gr.data)setGrades(gr.data.map(x=>({...x,assignmentId:x.assignment_id,courseId:x.course_id,maxScore:x.max_score})));
     // Load or create calendar token
     try{const{data:tokData}=await supabase.from("calendar_tokens").select("token").eq("user_id",uid).single();if(tokData?.token){setCalToken(tokData.token);}}catch(e){/* table may not exist yet, ignore */}
   }
@@ -902,6 +965,19 @@ export default function ProPlanScholar(){
     );
   }
 
+  async function saveGrade(assignmentId, courseId, score, maxScore){
+    const existing=grades.find(g=>g.assignmentId===assignmentId);
+    if(existing){
+      await supabase.from("grades").update({score,max_score:maxScore}).eq("id",existing.id);
+      setGrades(p=>p.map(g=>g.id===existing.id?{...g,score,maxScore}:g));
+    } else {
+      const{data}=await supabase.from("grades").insert({user_id:authUser.id,assignment_id:assignmentId,course_id:courseId,score,max_score:maxScore}).select().single();
+      if(data)setGrades(p=>[...p,{...data,assignmentId:data.assignment_id,courseId:data.course_id,maxScore:data.max_score}]);
+    }
+    setShowGradeModal(null);
+    notify("Grade saved!");
+  }
+
   async function toggleDone(id){
     const a=assignments.find(x=>x.id===id);if(!a)return;
     await supabase.from("assignments").update({done:!a.done}).eq("id",id);
@@ -962,6 +1038,51 @@ export default function ProPlanScholar(){
     const k=dateKey(t.year,t.month,t.day);
     await supabase.from("energy_log").upsert({user_id:authUser.id,log_date:k,level},{onConflict:"user_id,log_date"});
     setEnergyLog(p=>[...p.filter(e=>e.date!==k),{date:k,level}]);
+  }
+
+  function startFocus(block){
+    if(focusInterval.current)clearInterval(focusInterval.current);
+    const dur=25*60; // 25 minutes
+    setFocusTimer({blockId:block.id,blockTitle:block.title,courseColor:block.color||T.accent,startedAt:Date.now(),duration:dur,remaining:dur,isPaused:false,breakMode:false});
+    focusInterval.current=setInterval(()=>{
+      setFocusTimer(prev=>{
+        if(!prev||prev.isPaused)return prev;
+        const rem=prev.remaining-1;
+        if(rem<=0){
+          clearInterval(focusInterval.current);
+          if(!prev.breakMode){
+            // Work session done → switch to break
+            setTimeout(()=>notify("Focus session complete! Take a 5-minute break."),0);
+            const breakDur=5*60;
+            // Start break countdown
+            focusInterval.current=setInterval(()=>{
+              setFocusTimer(p=>{
+                if(!p||p.isPaused)return p;
+                const r=p.remaining-1;
+                if(r<=0){
+                  clearInterval(focusInterval.current);
+                  setTimeout(()=>notify("Break's over! Ready for another round?"),0);
+                  return{...p,remaining:0};
+                }
+                return{...p,remaining:r};
+              });
+            },1000);
+            return{...prev,remaining:breakDur,breakMode:true,duration:breakDur};
+          }
+          return{...prev,remaining:0};
+        }
+        return{...prev,remaining:rem};
+      });
+    },1000);
+  }
+  function pauseFocus(){setFocusTimer(p=>p?{...p,isPaused:!p.isPaused}:null);}
+  function stopFocus(){
+    if(focusInterval.current)clearInterval(focusInterval.current);
+    setFocusTimer(prev=>{
+      if(prev)setCompletedStudy(p=>({...p,[prev.blockId]:true}));
+      return null;
+    });
+    notify("Study session recorded!");
   }
 
   // ── Syllabus import ────────────────────────────────────────────────────────
@@ -1804,6 +1925,27 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
       {/* ── Toast ─────────────────────────────────────────── */}
       {notification&&<div style={{position:"fixed",top:"max(16px,env(safe-area-inset-top))",left:"50%",transform:"translateX(-50%)",background:T.success,color:"#fff",padding:"10px 20px",borderRadius:100,zIndex:999,fontSize:13,fontWeight:600,boxShadow:`0 4px 20px rgba(${hexToRgb(T.success)},.35)`,animation:"fi .3s ease",whiteSpace:"nowrap",maxWidth:"calc(100vw - 32px)",textAlign:"center"}}>{notification}</div>}
 
+      {/* ── Focus Timer Overlay ────────────────────────────── */}
+      {focusTimer&&(
+        <div style={{position:"fixed",bottom:isMobile?80:24,right:24,background:T.card,border:`2px solid ${focusTimer.courseColor}`,borderRadius:16,padding:"16px 20px",boxShadow:"0 8px 32px rgba(0,0,0,.3)",zIndex:9998,minWidth:240,animation:"slideUp .3s ease"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+            <div style={{fontSize:10,letterSpacing:2,color:focusTimer.breakMode?"#22c55e":focusTimer.courseColor,textTransform:"uppercase",fontWeight:700}}>{focusTimer.breakMode?"☕ Break":"🎯 Focus Mode"}</div>
+            <button onClick={stopFocus} style={{background:"transparent",border:"none",color:T.faint,cursor:"pointer",fontSize:14}}>✕</button>
+          </div>
+          <div style={{fontSize:11,color:T.muted,marginBottom:8,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{focusTimer.blockTitle}</div>
+          <div style={{fontSize:32,fontWeight:800,textAlign:"center",color:focusTimer.remaining<=60&&!focusTimer.breakMode?T.danger:T.text,fontVariantNumeric:"tabular-nums"}}>
+            {Math.floor(focusTimer.remaining/60).toString().padStart(2,"0")}:{(focusTimer.remaining%60).toString().padStart(2,"0")}
+          </div>
+          <div style={{background:T.border,borderRadius:4,height:4,marginTop:10,marginBottom:10,overflow:"hidden"}}>
+            <div style={{height:"100%",borderRadius:4,background:focusTimer.breakMode?"#22c55e":focusTimer.courseColor,width:`${((focusTimer.duration-focusTimer.remaining)/focusTimer.duration)*100}%`,transition:"width 1s linear"}}/>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={pauseFocus} className="bg2" style={{flex:1,fontSize:12,padding:"6px 0"}}>{focusTimer.isPaused?"▶ Resume":"⏸ Pause"}</button>
+            <button onClick={stopFocus} style={{flex:1,fontSize:12,padding:"6px 0",background:T.success,color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit"}}>✓ Done</button>
+          </div>
+        </div>
+      )}
+
       {/* ── Mobile header ─────────────────────────────────── */}
       <header className="mobile-header" style={{paddingTop:`max(12px,env(safe-area-inset-top))`}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -1923,7 +2065,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                 </div>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:10,marginBottom:14}}>
-                {[{l:"Courses",v:courses.length,c:T.accent,nav:"courses"},{l:"Pending",v:assignments.filter(a=>!a.done).length,c:T.warning,nav:"assignments"},{l:"Study Hrs Complete",v:Object.keys(completedStudy).filter(k=>completedStudy[k]).length*2,c:"#0ea5e9",nav:"calendar"},{l:"Milestones",v:milestones.filter(m=>!m.done).length,c:"#a78bfa",nav:"major-project"},{l:"Done",v:assignments.filter(a=>a.done).length,c:T.success,nav:"assignments"}].map(s=>(
+                {[{l:"Courses",v:courses.length,c:T.accent,nav:"courses"},{l:"Pending",v:assignments.filter(a=>!a.done).length,c:T.warning,nav:"assignments"},{l:"Study Hrs Complete",v:Object.keys(completedStudy).filter(k=>completedStudy[k]).length*2,c:"#0ea5e9",nav:"calendar"},{l:"Milestones",v:milestones.filter(m=>!m.done).length,c:"#a78bfa",nav:"major-project"},{l:"Done",v:assignments.filter(a=>a.done).length,c:T.success,nav:"assignments"},{l:"Streak",v:`${studyStreak}d 🔥`,c:"#f97316",nav:"analytics"}].map(s=>(
                   <div key={s.l} className="card stat-card" onClick={()=>setView(s.nav)} title={`Go to ${s.nav}`} style={{textAlign:"center",borderTop:`2px solid ${s.c}`,minWidth:90,flexShrink:0}}>
                     <div style={{fontSize:26,fontWeight:700,color:s.c}}>{s.v}</div>
                     <div style={{fontSize:9,color:T.muted,marginTop:2,letterSpacing:1,textTransform:"uppercase"}}>{s.l}</div>
@@ -2148,12 +2290,13 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                     )}
                     {asgn.map(a=>{const c=courses.find(x=>x.id===a.courseId);return(<div key={a.id} style={{display:"flex",gap:8,padding:"5px 0",borderBottom:`1px solid ${T.border}`,alignItems:"center"}}><span style={{color:c?.color,fontSize:12}}>📌</span><div style={{flex:1}}><div style={{fontWeight:600,fontSize:12}}>{a.title}</div><div style={{fontSize:10,color:T.muted}}>{c?.name}</div></div></div>);})}
                     {study.map(b=>{const done=completedStudy[b.id];const course=courses.find(c=>c.id===b.courseId);return(
-                      <div key={b.id} style={{display:"flex",gap:8,padding:"7px 0",borderBottom:`1px solid ${T.border}`,alignItems:"center",opacity:done?.6:1}}>
+                      <div key={b.id} style={{display:"flex",gap:8,padding:"7px 0",borderBottom:`1px solid ${T.border}`,alignItems:"center",opacity:done?.6:1,flexWrap:"wrap"}}>
                         <span style={{fontSize:12}}>📚</span>
                         <div style={{flex:1}}>
                           <div style={{fontWeight:600,fontSize:12,textDecoration:done?"line-through":"none"}}>{b.title}</div>
                           <div style={{fontSize:10,color:T.muted}}>{to12h(b.startTime)} – {to12h(b.endTime)} · {b.hours}h</div>
                           {course&&<div style={{fontSize:10,color:course.color,marginTop:1}}>● {course.name}</div>}
+                          {!done&&<button onClick={(e)=>{e.stopPropagation();startFocus(b);}} style={{background:`rgba(${hexToRgb(course?.color||T.accent)},.1)`,border:`1px solid ${course?.color||T.accent}`,borderRadius:6,padding:"3px 8px",fontSize:10,color:course?.color||T.accent,cursor:"pointer",marginTop:3,fontFamily:"inherit"}}>▶ Focus</button>}
                         </div>
                         <button onClick={()=>toggleStudyComplete(b.id)} style={{fontSize:10,padding:"3px 8px",borderRadius:6,border:`1px solid ${done?T.success:T.border2}`,background:done?`rgba(${hexToRgb(T.success)},.1)`:"transparent",color:done?T.success:T.muted,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{done?"✓ Done":"Mark Done"}</button>
                       </div>
@@ -2233,6 +2376,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                         <div style={{marginLeft:"auto",display:"flex",gap:5,flexShrink:0}}>
                           <button onClick={()=>{setShowFlashModal(a.id);setView("flashcards");}} style={{background:"transparent",border:`1px solid ${hasCards?"#a78bfa":T.border2}`,borderRadius:7,padding:"5px 9px",fontSize:11,color:hasCards?"#a78bfa":T.muted,minHeight:30}}>{hasCards?"⬡ Cards":"⬡ Gen"}</button>
                           <button onClick={()=>setEditAssign({...a})} style={{background:"transparent",border:`1px solid ${T.border2}`,borderRadius:7,padding:"5px 9px",fontSize:11,color:T.muted,minHeight:30}}>✏️</button>
+                          <button onClick={()=>{const existing=grades.find(g=>g.assignmentId===a.id);setGradeInput({score:existing?.score??"",maxScore:existing?.maxScore||100});setShowGradeModal(a);}} style={{background:"transparent",border:`1px solid ${T.border2}`,borderRadius:7,padding:"5px 9px",fontSize:11,color:T.muted,minHeight:30}}>📊</button>
                           <button className="del-btn" style={{padding:"5px 9px",minHeight:30}} onClick={()=>deleteAssignment(a.id)}>🗑</button>
                         </div>
                       </div>
@@ -2873,6 +3017,86 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                 </div>
               )}
 
+              {/* ── GPA Tracker ── */}
+              <div className="card" style={{marginTop:12}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                  <div style={{fontSize:10,letterSpacing:2,color:T.accent,textTransform:"uppercase"}}>GPA Tracker</div>
+                </div>
+                {grades.length===0?<div style={{color:T.faint,fontSize:12,textAlign:"center",padding:16}}>No grades logged yet. Use the 📊 button on any assignment to log a grade.</div>:(()=>{
+                  const{courseGrades,overall}=calcGPA(grades,courses,assignments);
+                  return(<div>
+                    <div style={{textAlign:"center",marginBottom:14}}>
+                      <div style={{fontSize:36,fontWeight:800,color:overall>=3.5?T.success:overall>=2.5?T.warning:T.danger}}>{overall.toFixed(2)}</div>
+                      <div style={{fontSize:11,color:T.muted}}>Current GPA</div>
+                    </div>
+                    {courseGrades.map(cg=>{const course=courses.find(c=>c.id===cg.courseId);return course?(<div key={cg.courseId} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:`1px solid ${T.border}`}}>
+                      <div style={{width:4,height:28,borderRadius:2,background:course.color,flexShrink:0}}/>
+                      <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600}}>{course.name}</div><div style={{fontSize:10,color:T.muted}}>{cg.pct.toFixed(1)}% · {cg.gpa.toFixed(1)} GPA</div></div>
+                      <div style={{fontSize:14,fontWeight:700,color:cg.gpa>=3.5?T.success:cg.gpa>=2.5?T.warning:T.danger}}>{cg.gpa.toFixed(1)}</div>
+                    </div>):null;})}
+                    {/* What-if calculator */}
+                    <div style={{marginTop:14,padding:"12px",background:T.subcard,borderRadius:10,border:`1px solid ${T.border2}`}}>
+                      <div style={{fontSize:11,fontWeight:700,color:T.accent,marginBottom:8}}>🎯 What-If Calculator</div>
+                      <div style={{fontSize:11,color:T.muted,marginBottom:8}}>What do I need on remaining assignments to hit my target GPA?</div>
+                      <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:8}}>
+                        <div style={{fontSize:11,color:T.muted}}>Target GPA:</div>
+                        <input type="number" className="ifield" step="0.1" min="0" max="4.0" value={gpaTarget||""} onChange={e=>setGpaTarget(+e.target.value)} placeholder="3.5" style={{width:70,fontSize:13,textAlign:"center"}}/>
+                      </div>
+                      {gpaTarget&&courseGrades.map(cg=>{
+                        const course=courses.find(c=>c.id===cg.courseId);
+                        if(!course)return null;
+                        const courseAssigns=assignments.filter(a=>a.courseId===cg.courseId);
+                        const gradedAssigns=grades.filter(g=>g.courseId===cg.courseId);
+                        const ungradedCount=courseAssigns.length-gradedAssigns.length;
+                        if(ungradedCount<=0)return(<div key={cg.courseId} style={{fontSize:11,color:T.muted,padding:"4px 0"}}>{course.name}: All graded — {cg.gpa>=gpaTarget?"✅ on track":"⚠️ below target"}</div>);
+                        // Calculate needed percentage: reverse the GPA scale
+                        const targetPcts={4.0:93,3.7:90,3.3:87,3.0:83,2.7:80,2.3:77,2.0:73,1.7:70,1.3:67,1.0:63,0.7:60,0.0:0};
+                        const neededOverallPct=Object.entries(targetPcts).sort((a,b)=>+b[0]-+a[0]).find(([g])=>+g<=gpaTarget)?.[1]||93;
+                        const totalAssigns=courseAssigns.length;
+                        const currentTotal=gradedAssigns.reduce((s,g)=>s+g.score,0);
+                        const currentMax=gradedAssigns.reduce((s,g)=>s+g.maxScore,0);
+                        const neededTotal=(neededOverallPct/100)*(currentMax+(ungradedCount*100))-currentTotal;
+                        const neededPct=Math.max(0,Math.min(100,Math.round(neededTotal/(ungradedCount*100)*100)));
+                        return(<div key={cg.courseId} style={{fontSize:11,padding:"4px 0",borderBottom:`1px solid ${T.border}`}}>
+                          <span style={{color:course.color,fontWeight:600}}>{course.name}:</span> Need ~<span style={{fontWeight:700,color:neededPct>95?T.danger:neededPct>85?T.warning:T.success}}>{neededPct}%</span> avg on {ungradedCount} remaining assignment{ungradedCount>1?"s":""}
+                        </div>);
+                      })}
+                    </div>
+                  </div>);
+                })()}
+              </div>
+
+              {/* ── Study Streak ── */}
+              <div className="card" style={{marginTop:12}}>
+                <div style={{fontSize:10,letterSpacing:2,color:T.accent,textTransform:"uppercase",marginBottom:10}}>Study Streak</div>
+                <div style={{display:"flex",gap:16,justifyContent:"center",marginBottom:14}}>
+                  <div style={{textAlign:"center"}}>
+                    <div style={{fontSize:36,fontWeight:800,color:studyStreak>=7?"#22c55e":studyStreak>=3?"#f97316":"#ef4444"}}>{studyStreak}</div>
+                    <div style={{fontSize:11,color:T.muted}}>Current Streak (days)</div>
+                  </div>
+                  <div style={{textAlign:"center"}}>
+                    <div style={{fontSize:36,fontWeight:800,color:T.accent}}>{longestStreak}</div>
+                    <div style={{fontSize:11,color:T.muted}}>Longest Streak</div>
+                  </div>
+                </div>
+                {/* Last 14 days activity grid */}
+                <div style={{fontSize:10,color:T.muted,marginBottom:6}}>Last 14 days</div>
+                <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                  {Array.from({length:14}).map((_,i)=>{
+                    const d=new Date();d.setDate(d.getDate()-(13-i));
+                    const ds=dateKey(d.getFullYear(),d.getMonth(),d.getDate());
+                    const hasStudy=studyBlocks.some(b=>completedStudy[b.id]&&b.date===ds);
+                    const hasEnergy=energyLog.some(e=>e.date===ds);
+                    const active=hasStudy||hasEnergy;
+                    const isToday=ds===dateKey(t.year,t.month,t.day);
+                    return(<div key={i} title={`${MONTHS[d.getMonth()]} ${d.getDate()}`} style={{width:24,height:24,borderRadius:6,background:active?`rgba(${hexToRgb(T.success)},.${hasStudy?"3":"15"})`:T.subcard,border:`1px solid ${isToday?T.accent:active?T.success:T.border2}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:active?T.success:T.faint}}>{active?"✓":d.getDate()}</div>);
+                  })}
+                </div>
+                <div style={{fontSize:11,color:T.muted,marginTop:10,textAlign:"center"}}>
+                  {studyStreak>=7?"Amazing consistency! Keep it up! 🏆":studyStreak>=3?"Nice streak building! Don't break the chain! 💪":studyStreak>=1?"Good start! Come back tomorrow to grow your streak! 🌱":"Complete a study session or log your energy to start a streak!"}
+                </div>
+              </div>
+
             </div>
           )}
 
@@ -3291,6 +3515,18 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
           <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Description / Notes <span style={{color:T.faint}}>(optional)</span></div><textarea className="ifield" rows={2} value={editAssign.topics||""} onChange={e=>setEditAssign(a=>({...a,topics:e.target.value}))} style={{resize:"vertical",fontSize:12}} placeholder="Key topics, requirements, what to focus on..."/></div>
           <div style={{display:"flex",gap:8,marginTop:4}}><button className="bg2" style={{flex:1}} onClick={()=>setEditAssign(null)}>Cancel</button><button className="bp" style={{flex:1}} onClick={saveEditAssignment}>Save Changes</button></div>
         </div>
+      </div></div>)}
+
+      {/* ═══ GRADE ENTRY MODAL ═══ */}
+      {showGradeModal&&(<div className="mo" onClick={()=>setShowGradeModal(null)}><div className="md fi" onClick={e=>e.stopPropagation()} style={{maxWidth:360}}>
+        <div style={{fontWeight:700,fontSize:16,marginBottom:13}}>Log Grade</div>
+        <div style={{fontSize:12,color:T.muted,marginBottom:10}}>{showGradeModal.title} · {courses.find(c=>c.id===showGradeModal.courseId)?.name}</div>
+        <div style={{display:"flex",gap:10,marginBottom:12}}>
+          <div style={{flex:1}}><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Your Score</div><input type="number" className="ifield" value={gradeInput.score} onChange={e=>setGradeInput(p=>({...p,score:e.target.value}))} min={0} style={{fontSize:14}}/></div>
+          <div style={{flex:1}}><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Out Of</div><input type="number" className="ifield" value={gradeInput.maxScore} onChange={e=>setGradeInput(p=>({...p,maxScore:e.target.value}))} min={1} style={{fontSize:14}}/></div>
+        </div>
+        {gradeInput.score!==""&&+gradeInput.maxScore>0&&(()=>{const pct=Math.round((+gradeInput.score/+gradeInput.maxScore)*100);return <div style={{fontSize:12,color:pct>=70?T.success:pct>=60?T.warning:T.danger,marginBottom:8,fontWeight:600}}>{pct}%</div>;})()}
+        <div style={{display:"flex",gap:8}}><button className="bg2" style={{flex:1}} onClick={()=>setShowGradeModal(null)}>Cancel</button><button className="bp" style={{flex:1}} onClick={()=>{const s=+gradeInput.score;const m=+gradeInput.maxScore;if(!s&&s!==0){notify("Enter your score");return;}saveGrade(showGradeModal.id,showGradeModal.courseId,s,m||100);}}>Save Grade</button></div>
       </div></div>)}
 
       {/* ═══ BOTTOM TAB BAR (mobile only) ═══ */}
