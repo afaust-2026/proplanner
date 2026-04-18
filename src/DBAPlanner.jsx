@@ -3147,36 +3147,72 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                 </div>
                 <div className="card">
                   <div style={{fontWeight:700,marginBottom:10}}>📅 Calendar Sync</div>
-                  <div style={{fontSize:12,color:T.muted,marginBottom:12,lineHeight:1.7}}>Subscribe to your ProPlan Scholar calendar in iPhone, Google, or Outlook. Classes, study sessions, due dates, and milestones — automatically updated.</div>
+                  <div style={{fontSize:12,color:T.muted,marginBottom:12,lineHeight:1.7}}>Subscribe to your ProPlan Scholar calendar once — classes, study sessions, due dates, and milestones appear in Outlook, Google, or Apple Calendar and <strong style={{color:T.text}}>update automatically</strong> whenever your schedule changes.</div>
                   {/* What syncs */}
                   <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>
                     {[["🎓","Classes"],["📌","Due Dates"],["📚","Study Blocks"],["⬟","Milestones"],["✈️","Blackouts"]].map(([icon,label])=>(
                       <span key={label} style={{fontSize:11,padding:"3px 9px",background:T.subcard,border:`1px solid ${T.border2}`,borderRadius:100,color:T.muted,display:"flex",alignItems:"center",gap:4}}>{icon} {label}</span>
                     ))}
                   </div>
-                  {/* Download button — works on ALL platforms, no server needed */}
-                  <button className="bp" style={{width:"100%",fontSize:13,marginBottom:12,padding:"12px"}} onClick={downloadICS}>
-                    ⬇️ Download Calendar File (.ics)
-                  </button>
-                  <div style={{padding:"10px 12px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`,marginBottom:12}}>
-                    <div style={{fontSize:12,fontWeight:600,marginBottom:6}}>🍎 iPhone — 3 steps:</div>
-                    <div style={{fontSize:11,color:T.muted,lineHeight:1.8}}>
-                      1. Tap the button above<br/>
-                      2. A prompt appears — tap <strong style={{color:T.text}}>"Add All"</strong><br/>
-                      3. Done! Open Calendar to see your schedule
+                  {/* Subscribe URL — the primary flow */}
+                  {!calToken?(
+                    <button className="bp" style={{width:"100%",fontSize:13,marginBottom:12,padding:"12px"}} onClick={generateCalToken}>
+                      🔗 Generate My Calendar Link
+                    </button>
+                  ):(
+                    <>
+                      <div style={{fontSize:11,color:T.muted,marginBottom:5,fontWeight:600}}>Your private calendar link</div>
+                      <div style={{display:"flex",gap:6,marginBottom:10}}>
+                        <input readOnly value={`https://academicplan.pro/api/calendar/${calToken}`} onClick={e=>e.target.select()} className="ifield" style={{flex:1,fontSize:11,fontFamily:"ui-monospace, SFMono-Regular, Menlo, monospace"}}/>
+                        <button className="bp" style={{fontSize:12,padding:"10px 14px",flexShrink:0}} onClick={copyCalUrl}>{calCopied?"✓ Copied":"Copy"}</button>
+                      </div>
+                      <div style={{fontSize:10,color:T.faint,marginBottom:12}}>🔒 Private to you. Anyone with this link can view your schedule — keep it to yourself.</div>
+                    </>
+                  )}
+                  {calToken&&(
+                    <>
+                      {/* Per-platform subscribe instructions */}
+                      <div style={{padding:"10px 12px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`,marginBottom:8}}>
+                        <div style={{fontSize:12,fontWeight:600,marginBottom:6}}>🔵 Outlook (web or desktop)</div>
+                        <div style={{fontSize:11,color:T.muted,lineHeight:1.8}}>
+                          1. Copy the link above<br/>
+                          2. Open Outlook → <strong style={{color:T.text}}>Calendar</strong> → <strong style={{color:T.text}}>Add calendar</strong> → <strong style={{color:T.text}}>Subscribe from web</strong><br/>
+                          3. Paste the link, give it a name (e.g. "ProPlan Scholar"), click <strong style={{color:T.text}}>Import</strong><br/>
+                          4. Outlook refreshes the calendar on its own — no more re-downloading
+                        </div>
+                      </div>
+                      <div style={{padding:"10px 12px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`,marginBottom:8}}>
+                        <div style={{fontSize:12,fontWeight:600,marginBottom:6}}>🟢 Google Calendar</div>
+                        <div style={{fontSize:11,color:T.muted,lineHeight:1.8}}>
+                          1. Copy the link above<br/>
+                          2. Open <strong style={{color:T.text}}>calendar.google.com</strong> on a computer<br/>
+                          3. Left sidebar → <strong style={{color:T.text}}>Other calendars</strong> → <strong style={{color:T.text}}>+</strong> → <strong style={{color:T.text}}>From URL</strong><br/>
+                          4. Paste the link → <strong style={{color:T.text}}>Add calendar</strong>. It will also appear on your phone's Google Calendar app.
+                        </div>
+                      </div>
+                      <div style={{padding:"10px 12px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`,marginBottom:8}}>
+                        <div style={{fontSize:12,fontWeight:600,marginBottom:6}}>🍎 iPhone / Mac Calendar</div>
+                        <div style={{fontSize:11,color:T.muted,lineHeight:1.8}}>
+                          <strong style={{color:T.text}}>One-tap on iPhone:</strong>{" "}
+                          <a href={`webcal://academicplan.pro/api/calendar/${calToken}`} style={{color:T.accent,fontWeight:600,textDecoration:"underline"}}>Tap here to subscribe</a> → tap <strong style={{color:T.text}}>Subscribe</strong> → <strong style={{color:T.text}}>Add</strong><br/>
+                          <strong style={{color:T.text}}>On Mac:</strong> Calendar app → <strong style={{color:T.text}}>File</strong> → <strong style={{color:T.text}}>New Calendar Subscription</strong> → paste link → <strong style={{color:T.text}}>Subscribe</strong>
+                        </div>
+                      </div>
+                      <div style={{padding:"8px 12px",background:`rgba(${rgb},.06)`,borderRadius:8,border:`1px solid rgba(${rgb},.15)`,marginBottom:10}}>
+                        <div style={{fontSize:11,color:T.muted}}>💡 <strong style={{color:T.text}}>Good to know:</strong> Most calendar apps refresh subscribed calendars every few hours. If you want to force a refresh, pull-to-refresh (iPhone) or reload the calendar app.</div>
+                      </div>
+                    </>
+                  )}
+                  {/* Secondary fallback — one-time download */}
+                  <details style={{marginTop:4}}>
+                    <summary style={{fontSize:11,color:T.faint,cursor:"pointer",userSelect:"none"}}>Prefer a one-time download instead?</summary>
+                    <div style={{padding:"8px 0 2px 0"}}>
+                      <div style={{fontSize:11,color:T.muted,lineHeight:1.6,marginBottom:8}}>Downloads a .ics file you import manually. It won't auto-update — you'd need to re-download after schedule changes.</div>
+                      <button className="bp" style={{width:"100%",fontSize:12,padding:"9px"}} onClick={downloadICS}>
+                        ⬇️ Download Calendar File (.ics)
+                      </button>
                     </div>
-                    <div style={{fontSize:10,color:T.faint,marginTop:6}}>Re-download anytime to refresh with latest changes.</div>
-                  </div>
-                  {[
-                    {p:"🟢 Google Calendar",s:'Download the file → open calendar.google.com → Settings gear → Import & Export → Import'},
-                    {p:"🔵 Outlook",s:"Download the file → open Outlook → Add Calendar → Upload from file → select the .ics file"},
-                    {p:"🖥 Mac Calendar",s:"Download → double-click the .ics file → Calendar opens and asks to add events"},
-                  ].map(x=>(
-                    <div key={x.p} style={{padding:"7px 10px",background:T.subcard,borderRadius:8,border:`1px solid ${T.border}`,marginBottom:6}}>
-                      <div style={{fontWeight:600,fontSize:12,marginBottom:2}}>{x.p}</div>
-                      <div style={{fontSize:11,color:T.muted,lineHeight:1.5}}>{x.s}</div>
-                    </div>
-                  ))}
+                  </details>
                 </div>
 
                 <div className="card">
@@ -3199,19 +3235,19 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                           <div style={{fontSize:11,color:T.success,fontWeight:600}}>✓ Available now</div>
                         </div>
                       </div>
-                      <div style={{fontSize:12,color:T.muted,lineHeight:1.7,marginBottom:12}}>Add your ProPlan Scholar schedule directly to Outlook. Classes, study sessions, and deadlines stay in sync.</div>
+                      <div style={{fontSize:12,color:T.muted,lineHeight:1.7,marginBottom:12}}>Subscribe your Outlook Calendar to your ProPlan Scholar schedule once — classes, study sessions, and deadlines then update automatically in the background.</div>
                       <div style={{padding:"10px 12px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`,marginBottom:10}}>
-                        <div style={{fontSize:12,fontWeight:600,marginBottom:6}}>How to add to Outlook:</div>
+                        <div style={{fontSize:12,fontWeight:600,marginBottom:6}}>How to subscribe in Outlook:</div>
                         <div style={{fontSize:11,color:T.muted,lineHeight:1.8}}>
-                          1. Scroll up to <strong style={{color:T.text}}>Calendar Sync</strong> and tap <strong style={{color:T.text}}>Download Calendar File</strong><br/>
-                          2. Open <strong style={{color:T.text}}>Outlook</strong> on your phone or computer<br/>
-                          3. Tap the calendar icon → <strong style={{color:T.text}}>Add Calendar</strong><br/>
-                          4. Choose <strong style={{color:T.text}}>Upload from file</strong> → select the downloaded .ics file<br/>
-                          5. Your classes and study sessions appear immediately
+                          1. Scroll up to <strong style={{color:T.text}}>Calendar Sync</strong> and tap <strong style={{color:T.text}}>Copy</strong> next to your calendar link<br/>
+                          2. Open <strong style={{color:T.text}}>Outlook</strong> (web or desktop) and go to <strong style={{color:T.text}}>Calendar</strong><br/>
+                          3. Click <strong style={{color:T.text}}>Add calendar</strong> → <strong style={{color:T.text}}>Subscribe from web</strong><br/>
+                          4. Paste the link, name it "ProPlan Scholar", and click <strong style={{color:T.text}}>Import</strong><br/>
+                          5. Your classes and study sessions appear — and stay current on their own
                         </div>
                       </div>
                       <div style={{padding:"8px 12px",background:`rgba(${rgb},.06)`,borderRadius:8,border:`1px solid rgba(${rgb},.15)`}}>
-                        <div style={{fontSize:11,color:T.muted}}>💡 <strong style={{color:T.text}}>Tip:</strong> Re-download the calendar file at the start of each week to keep Outlook updated with your latest schedule.</div>
+                        <div style={{fontSize:11,color:T.muted}}>💡 <strong style={{color:T.text}}>No more weekly re-downloads:</strong> Outlook checks the link periodically on its own. When you add or change something in ProPlan Scholar, it shows up in your Outlook calendar automatically within a few hours.</div>
                       </div>
                     </div>
                   )}
