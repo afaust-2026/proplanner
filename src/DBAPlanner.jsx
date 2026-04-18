@@ -586,6 +586,19 @@ export default function ProPlanScholar(){
   const T=buildTheme(profile?.university_primary||"#6366f1",dark);
   const rgb=hexToRgb(T.accent);
 
+  // ── Dynamic favicon — updates to school color ─────────────────────────────
+  useEffect(()=>{
+    const color=profile?.university_primary||"#C75B12";
+    const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0e0e14"/><text x="32" y="50" text-anchor="middle" font-family="Georgia,serif" font-weight="bold" font-size="46" fill="${color}">P</text></svg>`;
+    const blob=new Blob([svg],{type:"image/svg+xml"});
+    const url=URL.createObjectURL(blob);
+    let link=document.querySelector("link[rel='icon']");
+    if(!link){link=document.createElement("link");link.rel="icon";document.head.appendChild(link);}
+    link.type="image/svg+xml";
+    link.href=url;
+    return()=>URL.revokeObjectURL(url);
+  },[profile?.university_primary]);
+
   // ── Auth setup ─────────────────────────────────────────────────────────────
   useEffect(()=>{
     if(!supabase){setAuthLoading(false);return;}
