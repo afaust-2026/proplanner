@@ -36,8 +36,10 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // Cache the app shell and core assets
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Cache the app shell and core assets — exclude landing/privacy/terms so Vercel routing handles them
+        globPatterns: ['**/*.{js,css,ico,png,svg,woff2}'],
+        navigateFallback: '/index.html',
+        navigateFallbackAllowlist: [/^\/app/],
         runtimeCaching: [
           {
             // Cache Google Fonts
