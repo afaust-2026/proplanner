@@ -2019,7 +2019,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                 <span style={{fontSize:14}}>{dark?"☀️":"🌙"}</span>
               </button>
             </div>
-            <button onClick={async()=>{await supabase.auth.signOut();setAuthUser(null);setProfile(null);setCourses([]);setAssignments([]);setMilestones([]);setScheduleBlocks([]);setTravelDates([]);setEnergyLog([]);}} className="nb" style={{justifyContent:"flex-start",color:T.faint,borderRadius:10,padding:"8px 10px",fontSize:13}}>
+            <button onClick={async()=>{await supabase.auth.signOut();window.location.href="/";}} className="nb" style={{justifyContent:"flex-start",color:T.faint,borderRadius:10,padding:"8px 10px",fontSize:13}}>
               <span style={{fontSize:14}}>↩</span>
               {sidebarOpen&&<span style={{fontSize:13,whiteSpace:"nowrap"}}>Sign Out</span>}
             </button>
@@ -3358,9 +3358,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                   <div style={{fontWeight:700,marginBottom:6,color:T.danger}}>Account</div>
                   <div style={{fontSize:12,color:T.muted,marginBottom:12}}>Signed in as {authUser?.email}</div>
                   <button onClick={async()=>{
-                    await supabase.auth.signOut();
-                    setAuthUser(null);setProfile(null);setCourses([]);setAssignments([]);
-                    setMilestones([]);setScheduleBlocks([]);setTravelDates([]);setEnergyLog([]);
+                    await supabase.auth.signOut();window.location.href="/";
                   }} style={{width:"100%",padding:"11px",borderRadius:9,border:`1px solid ${T.danger}`,background:"transparent",color:T.danger,fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>
                     Sign Out
                   </button>
