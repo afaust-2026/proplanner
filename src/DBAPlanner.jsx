@@ -187,7 +187,7 @@ function AuthScreen({onAuth}){
   // ── Reset password screen ──────────────────────────────────────────────────
   if(mode==="reset") return(
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#0f0f13 0%,#1a1a2e 100%)",fontFamily:"'Inter',system-ui,sans-serif"}}>
-      <div style={{width:"min(90vw,420px)",padding:"40px 36px",background:"#16161f",borderRadius:20,border:"1px solid #2a2a38",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
+      <div style={{width:"min(92vw,420px)",padding:"clamp(24px,5vw,40px) clamp(18px,4vw,36px)",background:"#16161f",borderRadius:20,border:"1px solid #2a2a38",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
         <div style={{textAlign:"center",marginBottom:28}}>
           <div style={{fontSize:40,marginBottom:10}}>🔐</div>
           <div style={{fontSize:22,fontWeight:700,color:"#e8e3d8"}}>Set New Password</div>
@@ -219,7 +219,7 @@ function AuthScreen({onAuth}){
   // ── Forgot password screen ──────────────────────────────────────────────────
   if(mode==="forgot") return(
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#0f0f13 0%,#1a1a2e 100%)",fontFamily:"'Inter',system-ui,sans-serif"}}>
-      <div style={{width:"min(90vw,420px)",padding:"40px 36px",background:"#16161f",borderRadius:20,border:"1px solid #2a2a38",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
+      <div style={{width:"min(92vw,420px)",padding:"clamp(24px,5vw,40px) clamp(18px,4vw,36px)",background:"#16161f",borderRadius:20,border:"1px solid #2a2a38",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
         <button onClick={()=>switchMode("login")} style={{background:"transparent",border:"none",color:"#7a7590",fontSize:13,cursor:"pointer",fontFamily:"inherit",marginBottom:20,display:"flex",alignItems:"center",gap:5,padding:0}}>← Back to Sign In</button>
         <div style={{textAlign:"center",marginBottom:28}}>
           <div style={{fontSize:40,marginBottom:10}}>📧</div>
@@ -249,7 +249,7 @@ function AuthScreen({onAuth}){
   // ── Login / Signup screen ──────────────────────────────────────────────────
   return(
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#0f0f13 0%,#1a1a2e 100%)",fontFamily:"'Inter',system-ui,sans-serif"}}>
-      <div style={{width:"min(90vw,420px)",padding:"40px 36px",background:"#16161f",borderRadius:20,border:"1px solid #2a2a38",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
+      <div style={{width:"min(92vw,420px)",padding:"clamp(24px,5vw,40px) clamp(18px,4vw,36px)",background:"#16161f",borderRadius:20,border:"1px solid #2a2a38",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
         <div style={{textAlign:"center",marginBottom:30}}>
           <div style={{fontSize:44,marginBottom:10}}>🎓</div>
           <div style={{fontSize:26,fontWeight:700,color:"#e8e3d8"}}>ProPlan Scholar</div>
@@ -522,6 +522,10 @@ export default function ProPlanScholar(){
   const[showAddBlock,setShowAddBlock]=useState(false);
   const[uploading,setUploading]=useState(false);
   const[uploadMsg,setUploadMsg]=useState("");
+  const[feedbackText,setFeedbackText]=useState("");
+  const[feedbackType,setFeedbackType]=useState("suggestion");
+  const[feedbackSent,setFeedbackSent]=useState(false);
+  const[feedbackSending,setFeedbackSending]=useState(false);
   const[notification,setNotification]=useState("");
   const[newAssign,setNewAssign]=useState({courseId:"",title:"",due:"",type:"",estHours:4});
   const[editAssign,setEditAssign]=useState(null); // holds assignment being edited
@@ -572,6 +576,7 @@ export default function ProPlanScholar(){
   // Focus timer state
   const[focusTimer,setFocusTimer]=useState(null); // {blockId, blockTitle, courseColor, startedAt, duration, remaining, isPaused, breakMode}
   const focusInterval=useRef(null);
+  const mainRef=useRef(null);
 
   // Streak state
   const[studyStreak,setStudyStreak]=useState(0);
@@ -598,6 +603,12 @@ export default function ProPlanScholar(){
     link.href=url;
     return()=>URL.revokeObjectURL(url);
   },[profile?.university_primary]);
+
+  // ── Scroll to top on view change ──────────────────────────────────────────
+  useEffect(()=>{
+    if(mainRef.current)mainRef.current.scrollTop=0;
+    window.scrollTo(0,0);
+  },[view]);
 
   // ── Auth setup ─────────────────────────────────────────────────────────────
   useEffect(()=>{
@@ -1285,7 +1296,7 @@ Return ONLY the JSON object, nothing else.`}
       let et=c.class_end_time;
       if(!et){const[sh,sm]=st.split(":").map(Number);let eh=sh+1,em=sm+30;if(em>=60){eh++;em-=60;}et=`${String(eh).padStart(2,"0")}:${String(em).padStart(2,"0")}`;}
       const until=`${new Date().getFullYear()}1231T235959Z`;
-      events.push(["BEGIN:VEVENT",`UID:class-${c.id}@academicplan.pro`,`DTSTAMP:${stamp()}`,
+      events.push(["BEGIN:VEVENT",`UID:class-${c.id}@proplanscholar.com`,`DTSTAMP:${stamp()}`,
         `DTSTART;TZID=America/Chicago:${icsTime(startDate,st)}`,
         `DTEND;TZID=America/Chicago:${icsTime(startDate,et)}`,
         `RRULE:FREQ=WEEKLY;BYDAY=${byDay};UNTIL=${until}`,
@@ -1298,7 +1309,7 @@ Return ONLY the JSON object, nothing else.`}
     assignments.forEach(a=>{
       const aDue=a.due||a.due_date;if(!aDue)return;
       const c=courses.find(x=>x.id===a.courseId);
-      events.push(["BEGIN:VEVENT",`UID:due-${a.id}@academicplan.pro`,`DTSTAMP:${stamp()}`,
+      events.push(["BEGIN:VEVENT",`UID:due-${a.id}@proplanscholar.com`,`DTSTAMP:${stamp()}`,
         `DTSTART;VALUE=DATE:${icsDate(aDue)}`,`DTEND;VALUE=DATE:${icsDate(aDue)}`,
         `SUMMARY:📌 ${esc(a.title)} — DUE`,
         `DESCRIPTION:Course: ${esc(c?.name||"")}\\nType: ${esc(a.type||"")}`,
@@ -1309,7 +1320,7 @@ Return ONLY the JSON object, nothing else.`}
     // Study blocks (from already-calculated studyBlocks)
     studyBlocks.forEach(b=>{
       const c=courses.find(x=>x.id===b.courseId);
-      events.push(["BEGIN:VEVENT",`UID:study-${b.id}@academicplan.pro`,`DTSTAMP:${stamp()}`,
+      events.push(["BEGIN:VEVENT",`UID:study-${b.id}@proplanscholar.com`,`DTSTAMP:${stamp()}`,
         `DTSTART;TZID=America/Chicago:${icsTime(b.date,b.startTime)}`,
         `DTEND;TZID=America/Chicago:${icsTime(b.date,b.endTime)}`,
         `SUMMARY:📚 Study: ${esc(b.title)}`,
@@ -1320,7 +1331,7 @@ Return ONLY the JSON object, nothing else.`}
     // Milestones
     milestones.forEach(m=>{
       if(!m.due)return;
-      events.push(["BEGIN:VEVENT",`UID:ms-${m.id}@academicplan.pro`,`DTSTAMP:${stamp()}`,
+      events.push(["BEGIN:VEVENT",`UID:ms-${m.id}@proplanscholar.com`,`DTSTAMP:${stamp()}`,
         `DTSTART;VALUE=DATE:${icsDate(m.due)}`,`DTEND;VALUE=DATE:${icsDate(m.due)}`,
         `SUMMARY:⬟ ${esc(m.title)}`,m.notes?`DESCRIPTION:${esc(m.notes)}`:"",
         "CATEGORIES:MILESTONE",m.done?"STATUS:COMPLETED":"STATUS:CONFIRMED",
@@ -1331,7 +1342,7 @@ Return ONLY the JSON object, nothing else.`}
     travelDates.forEach(tr=>{
       const start=tr.start||tr.start_date;const end=tr.end||tr.end_date||start;
       if(!start)return;
-      events.push(["BEGIN:VEVENT",`UID:travel-${tr.id}@academicplan.pro`,`DTSTAMP:${stamp()}`,
+      events.push(["BEGIN:VEVENT",`UID:travel-${tr.id}@proplanscholar.com`,`DTSTAMP:${stamp()}`,
         `DTSTART;VALUE=DATE:${icsDate(start)}`,`DTEND;VALUE=DATE:${icsDate(end)}`,
         `SUMMARY:✈️ ${esc(tr.label||"Blackout")}`,
         "CATEGORIES:TRAVEL","TRANSP:OPAQUE","END:VEVENT"].join("\r\n"));
@@ -1339,7 +1350,7 @@ Return ONLY the JSON object, nothing else.`}
 
     const lines=[
       "BEGIN:VCALENDAR","VERSION:2.0",
-      "PRODID:-//ProPlan Scholar//academicplan.pro//EN",
+      "PRODID:-//ProPlan Scholar//proplanscholar.com//EN",
       "CALSCALE:GREGORIAN","METHOD:PUBLISH",
       "X-WR-CALNAME:ProPlan Scholar",
       "X-WR-TIMEZONE:America/Chicago",
@@ -1389,7 +1400,7 @@ Return ONLY the JSON object, nothing else.`}
   }
 
   function copyCalUrl(){
-    const url=`https://academicplan.pro/api/calendar/${calToken}`;
+    const url=`https://proplanscholar.com/api/calendar/${calToken}`;
     navigator.clipboard.writeText(url).then(()=>{setCalCopied(true);setTimeout(()=>setCalCopied(false),2500);});
   }
 
@@ -2046,7 +2057,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
 
         {/* ═══ MAIN CONTENT ═══ */}
 
-        <main className="main-content" style={{flex:1,overflowY:"auto",padding:"24px 28px",minWidth:0,position:"relative",WebkitOverflowScrolling:"touch"}}>
+        <main ref={mainRef} className="main-content" style={{flex:1,overflowY:"auto",padding:"24px 28px",minWidth:0,position:"relative",WebkitOverflowScrolling:"touch"}}>
 
 
           {/* PWA Install Banner */}
@@ -3176,7 +3187,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                     <>
                       <div style={{fontSize:11,color:T.muted,marginBottom:5,fontWeight:600}}>Your private calendar link</div>
                       <div style={{display:"flex",gap:6,marginBottom:10}}>
-                        <input readOnly value={`https://academicplan.pro/api/calendar/${calToken}`} onClick={e=>e.target.select()} className="ifield" style={{flex:1,fontSize:11,fontFamily:"ui-monospace, SFMono-Regular, Menlo, monospace"}}/>
+                        <input readOnly value={`https://proplanscholar.com/api/calendar/${calToken}`} onClick={e=>e.target.select()} className="ifield" style={{flex:1,fontSize:11,fontFamily:"ui-monospace, SFMono-Regular, Menlo, monospace"}}/>
                         <button className="bp" style={{fontSize:12,padding:"10px 14px",flexShrink:0}} onClick={copyCalUrl}>{calCopied?"✓ Copied":"Copy"}</button>
                       </div>
                       <div style={{fontSize:10,color:T.faint,marginBottom:12}}>🔒 Private to you. Anyone with this link can view your schedule — keep it to yourself.</div>
@@ -3207,7 +3218,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                         <div style={{fontSize:12,fontWeight:600,marginBottom:6}}>🍎 iPhone / Mac Calendar</div>
                         <div style={{fontSize:11,color:T.muted,lineHeight:1.8}}>
                           <strong style={{color:T.text}}>One-tap on iPhone:</strong>{" "}
-                          <a href={`webcal://academicplan.pro/api/calendar/${calToken}`} style={{color:T.accent,fontWeight:600,textDecoration:"underline"}}>Tap here to subscribe</a> → tap <strong style={{color:T.text}}>Subscribe</strong> → <strong style={{color:T.text}}>Add</strong><br/>
+                          <a href={`webcal://proplanscholar.com/api/calendar/${calToken}`} style={{color:T.accent,fontWeight:600,textDecoration:"underline"}}>Tap here to subscribe</a> → tap <strong style={{color:T.text}}>Subscribe</strong> → <strong style={{color:T.text}}>Add</strong><br/>
                           <strong style={{color:T.text}}>On Mac:</strong> Calendar app → <strong style={{color:T.text}}>File</strong> → <strong style={{color:T.text}}>New Calendar Subscription</strong> → paste link → <strong style={{color:T.text}}>Subscribe</strong>
                         </div>
                       </div>
@@ -3375,6 +3386,42 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                   }} style={{width:"100%",padding:"11px",borderRadius:9,border:`1px solid ${T.danger}`,background:"transparent",color:T.danger,fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>
                     Sign Out
                   </button>
+                </div>
+
+                {/* Feedback / Report Issue */}
+                <div className="card" style={{borderLeft:`3px solid ${T.accent}`}}>
+                  <div style={{fontWeight:700,marginBottom:4}}>Enhancement Suggestion / Report Issue</div>
+                  <div style={{fontSize:12,color:T.muted,marginBottom:12}}>Help us improve ProPlan Scholar. Your feedback goes directly to our team.</div>
+                  {feedbackSent?(
+                    <div style={{textAlign:"center",padding:"16px 0"}}>
+                      <div style={{fontSize:28,marginBottom:8}}>🎉</div>
+                      <div style={{fontWeight:600,fontSize:14,marginBottom:4}}>Thank you for your feedback!</div>
+                      <div style={{fontSize:12,color:T.muted,marginBottom:12}}>We appreciate you taking the time to help us improve.</div>
+                      <button onClick={()=>{setFeedbackSent(false);setFeedbackText("");}} style={{fontSize:12,color:T.accent,background:"transparent",border:"none",cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}}>Submit another</button>
+                    </div>
+                  ):(
+                    <>
+                      <div style={{display:"flex",gap:6,marginBottom:10}}>
+                        {[["suggestion","💡 Suggestion"],["bug","🐛 Bug Report"],["other","💬 Other"]].map(([val,label])=>(
+                          <button key={val} onClick={()=>setFeedbackType(val)} style={{flex:1,padding:"7px 4px",borderRadius:7,border:`1px solid ${feedbackType===val?T.accent:T.border2}`,background:feedbackType===val?`rgba(${hexToRgb(T.accent)},.1)`:"transparent",color:feedbackType===val?T.accent:T.muted,fontSize:11,fontWeight:feedbackType===val?600:400,cursor:"pointer",fontFamily:"inherit",transition:"all .2s"}}>{label}</button>
+                        ))}
+                      </div>
+                      <textarea value={feedbackText} onChange={e=>setFeedbackText(e.target.value)} placeholder={feedbackType==="bug"?"Describe the issue — what happened and what you expected...":"Describe your idea or suggestion..."} style={{width:"100%",minHeight:80,background:T.subcard,border:`1px solid ${T.border2}`,borderRadius:8,padding:"10px 12px",color:T.text,fontSize:13,fontFamily:"inherit",resize:"vertical",outline:"none"}}/>
+                      <button onClick={async()=>{
+                        if(!feedbackText.trim())return;
+                        setFeedbackSending(true);
+                        try{
+                          const subject=encodeURIComponent(`[${feedbackType.toUpperCase()}] ProPlan Scholar Feedback`);
+                          const body=encodeURIComponent(`Type: ${feedbackType}\nFrom: ${authUser?.email||"Unknown"}\nUniversity: ${uni?.name||"Unknown"}\n\n${feedbackText}`);
+                          window.location.href=`mailto:hello@proplanscholar.com?subject=${subject}&body=${body}`;
+                          setFeedbackSent(true);
+                        }catch(e){notify("Could not open email client.");}
+                        setFeedbackSending(false);
+                      }} disabled={!feedbackText.trim()||feedbackSending} style={{width:"100%",marginTop:8,padding:"11px",borderRadius:9,border:"none",background:!feedbackText.trim()?T.border2:T.accent,color:"#fff",fontWeight:600,fontSize:13,cursor:feedbackText.trim()?"pointer":"not-allowed",fontFamily:"inherit",opacity:feedbackText.trim()?1:0.5,transition:"all .2s"}}>
+                        {feedbackSending?"Opening email...":"Send Feedback →"}
+                      </button>
+                    </>
+                  )}
                 </div>
 
                 <div className="card">
