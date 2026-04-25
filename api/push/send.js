@@ -1,7 +1,8 @@
 // api/push/send.js
 // Vercel Cron — runs daily at 8:00 AM CT (14:00 UTC)
-// Sends push notifications for deadlines at 3 days, 1 day, and day-of
-// Uses Web Crypto API for VAPID signing — no external dependencies
+// Uses web-push npm package for proper Web Push encryption
+
+import webpush from 'web-push';
 
 const SUPABASE_URL  = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
 const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_KEY || '';
@@ -26,70 +27,6 @@ function daysUntil(dateStr) {
   return Math.ceil((new Date(dateStr + 'T00:00:00') - n) / 86400000);
 }
 
-function b64urlToUint8(b64url) {
-  const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
-  const padded = b64 + '='.repeat((4 - b64.length % 4) % 4);
-  return Uint8Array.from(Buffer.from(padded, 'base64'));
-}
-
-function uint8ToB64url(buf) {
-  return Buffer.from(buf).toString('base64')
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-}
-
-async function generateVAPIDJWT(audience) {
-  const header = uint8ToB64url(Buffer.from(JSON.stringify({ typ: 'JWT', alg: 'ES256' })));
-  const now = Math.floor(Date.now() / 1000);
-  const payload = uint8ToB64url(Buffer.from(JSON.stringify({
-    aud: audience, exp: now + 12 * 3600, sub: VAPID_SUBJECT,
-  })));
-  const signingInput = `${header}.${payload}`;
-
-  const rawPrivateKey = b64urlToUint8(VAPID_PRIVATE);
-  const rawPublicKey  = b64urlToUint8(VAPID_PUBLIC);
-
-  // Public key: 0x04 + 32 bytes X + 32 bytes Y
-  const x = uint8ToB64url(rawPublicKey.slice(1, 33));
-  const y = uint8ToB64url(rawPublicKey.slice(33, 65));
-  const d = uint8ToB64url(rawPrivateKey);
-
-  const cryptoKey = await crypto.subtle.importKey(
-    'jwk',
-    { kty: 'EC', crv: 'P-256', x, y, d },
-    { name: 'ECDSA', namedCurve: 'P-256' },
-    false, ['sign']
-  );
-
-  const signature = await crypto.subtle.sign(
-    { name: 'ECDSA', hash: { name: 'SHA-256' } },
-    cryptoKey,
-    new TextEncoder().encode(signingInput)
-  );
-
-  const jwt = `${signingInput}.${uint8ToB64url(new Uint8Array(signature))}`;
-  return `vapid t=${jwt}, k=${VAPID_PUBLIC}`;
-}
-
-async function sendWebPush(subscriptionStr, payload) {
-  const sub = typeof subscriptionStr === 'string' ? JSON.parse(subscriptionStr) : subscriptionStr;
-  const { endpoint } = sub;
-  const url = new URL(endpoint);
-  const audience = `${url.protocol}//${url.host}`;
-  const vapidAuth = await generateVAPIDJWT(audience);
-
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Authorization': vapidAuth, 'Content-Type': 'application/json', 'TTL': '86400' },
-    body: JSON.stringify(payload),
-  });
-
-  if (res.status === 410 || res.status === 404) return { expired: true };
-  if (!res.ok && res.status !== 201) {
-    throw new Error(`Push failed ${res.status}: ${await res.text()}`);
-  }
-  return { success: true };
-}
-
 function buildNotification(assignment, courseName, days) {
   const title = assignment.title;
   const course = courseName || 'your course';
@@ -108,6 +45,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'VAPID keys not configured' });
   }
 
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE);
   const results = { sent: 0, skipped: 0, expired: 0, errors: [] };
 
   try {
@@ -116,6 +54,7 @@ export default async function handler(req, res) {
 
     for (const sub of (subscriptions || [])) {
       try {
+        const subscription = typeof sub.subscription === 'string' ? JSON.parse(sub.subscription) : sub.subscription;
         const [assignments, courses] = await Promise.all([
           supaFetch('assignments', { user_id: `eq.${sub.user_id}`, done: 'eq.false', select: '*' }),
           supaFetch('courses', { user_id: `eq.${sub.user_id}`, select: 'id,name' }),
@@ -128,16 +67,20 @@ export default async function handler(req, res) {
           const course = (courses || []).find(c => c.id === assignment.course_id);
           const notification = buildNotification(assignment, course?.name, days);
           if (!notification) continue;
-          const result = await sendWebPush(sub.subscription, notification);
-          if (result.expired) {
-            await fetch(`${SUPABASE_URL}/rest/v1/push_subscriptions?user_id=eq.${sub.user_id}`, {
-              method: 'DELETE',
-              headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
-            });
-            results.expired++;
-            break;
+          try {
+            await webpush.sendNotification(subscription, JSON.stringify(notification), { TTL: 86400 });
+            sentCount++;
+          } catch (pushErr) {
+            if (pushErr.statusCode === 410 || pushErr.statusCode === 404) {
+              await fetch(`${SUPABASE_URL}/rest/v1/push_subscriptions?user_id=eq.${sub.user_id}`, {
+                method: 'DELETE',
+                headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
+              });
+              results.expired++;
+              break;
+            }
+            throw pushErr;
           }
-          sentCount++;
           await new Promise(r => setTimeout(r, 100));
         }
         results.sent += sentCount;
