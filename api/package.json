@@ -1,0 +1,8 @@
+{
+  "name": "proplan-scholar-api",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "web-push": "^3.6.7"
+  }
+}
