@@ -499,6 +499,8 @@ export default function ProPlanScholar(){
   const[canvasToken,setCanvasToken]=useState(""); // Canvas API token
   const[canvasImporting,setCanvasImporting]=useState(false);
   const[integrationTab,setIntegrationTab]=useState("outlook"); // active integration tab
+  const[pushEnabled,setPushEnabled]=useState(false); // push notification subscription status
+  const[pushLoading,setPushLoading]=useState(false); // push subscription loading state
   const[trackerCategory,setTrackerCategory]=useState(null); // drill-down category
   const[milestones,setMilestones]=useState([]);
   const[scheduleBlocks,setScheduleBlocks]=useState([]);  // practice, greek, work events
@@ -715,6 +717,66 @@ export default function ProPlanScholar(){
   }
 
   function notify(msg){setNotification(msg);setTimeout(()=>setNotification(""),3500);}
+
+  // ── Push notification subscription ───────────────────────────────────────
+  async function subscribeToPush(){
+    setPushLoading(true);
+    try{
+      if(!('Notification' in window)||!('serviceWorker' in navigator)){
+        notify("Push notifications are not supported on this browser.");
+        setPushLoading(false); return;
+      }
+      const permission=await Notification.requestPermission();
+      if(permission!=='granted'){
+        notify("Please allow notifications in your browser settings.");
+        setPushLoading(false); return;
+      }
+      const reg=await navigator.serviceWorker.ready;
+      const sub=await reg.pushManager.subscribe({
+        userVisibleOnly:true,
+        applicationServerKey:'BMqudEIQ_tmY9ltSETTZFuQpZ0YU2VSU8PXP2hXWwvwSUcCPR5d7z-WoLBZuGelOeyCE7R_T91dHZIK2d2LJTog'
+      });
+      await fetch('/api/push/subscribe',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({subscription:sub.toJSON(),userId:authUser.id})
+      });
+      setPushEnabled(true);
+      notify("Push notifications enabled! You'll get deadline reminders automatically.");
+    }catch(err){
+      notify("Could not enable notifications: "+err.message);
+    }
+    setPushLoading(false);
+  }
+
+  async function unsubscribeFromPush(){
+    setPushLoading(true);
+    try{
+      const reg=await navigator.serviceWorker.ready;
+      const sub=await reg.pushManager.getSubscription();
+      if(sub) await sub.unsubscribe();
+      await fetch('/api/push/subscribe',{
+        method:'DELETE',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({userId:authUser.id})
+      });
+      setPushEnabled(false);
+      notify("Push notifications disabled.");
+    }catch(err){
+      notify("Error disabling notifications.");
+    }
+    setPushLoading(false);
+  }
+
+  // Check push subscription status on load
+  async function checkPushStatus(){
+    try{
+      if(!('serviceWorker' in navigator)||!('PushManager' in window)) return;
+      const reg=await navigator.serviceWorker.ready;
+      const sub=await reg.pushManager.getSubscription();
+      setPushEnabled(!!sub);
+    }catch(e){}
+  }
 
   // ── Feature gate helper ───────────────────────────────────────────────────
   function ProGate({feature,children}){
@@ -3244,8 +3306,8 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
 
                   {/* Tab selector */}
                   <div style={{display:"flex",gap:4,marginBottom:14,flexWrap:"wrap"}}>
-                    {[["outlook","📅 Outlook"],["sms","📱 SMS"],["canvas","📚 Canvas"],["email","📧 Email"]].map(([id,label])=>(
-                      <button key={id} onClick={()=>setIntegrationTab(id)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${integrationTab===id?T.accent:T.border2}`,background:integrationTab===id?`rgba(${rgb},.1)`:"transparent",color:integrationTab===id?T.accent:T.muted,fontSize:11,fontWeight:integrationTab===id?700:400,fontFamily:"inherit",cursor:"pointer"}}>{label}</button>
+                    {[["outlook","📅 Outlook"],["sms","📱 SMS"],["push","🔔 Push"],["canvas","📚 Canvas"],["email","📧 Email"]].map(([id,label])=>(
+                      <button key={id} onClick={()=>{setIntegrationTab(id);if(id==="push")checkPushStatus();}} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${integrationTab===id?T.accent:T.border2}`,background:integrationTab===id?`rgba(${rgb},.1)`:"transparent",color:integrationTab===id?T.accent:T.muted,fontSize:11,fontWeight:integrationTab===id?700:400,fontFamily:"inherit",cursor:"pointer"}}>{label}</button>
                     ))}
                   </div>
 
@@ -3306,6 +3368,38 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                       </div>
                       <div style={{marginTop:10,padding:"8px 12px",background:`rgba(${rgb},.06)`,borderRadius:8,border:`1px solid rgba(${rgb},.15)`}}>
                         <div style={{fontSize:11,color:T.muted}}>💡 To stop receiving texts, clear your phone number and tap Save.</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* PUSH NOTIFICATIONS */}
+                  {integrationTab==="push"&&(
+                    <div>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                        <span style={{fontSize:20}}>🔔</span>
+                        <div style={{flex:1}}>
+                          <div style={{fontWeight:600,fontSize:13}}>Push Notifications</div>
+                          <div style={{fontSize:11,color:T.success,fontWeight:600}}>✓ Available now</div>
+                        </div>
+                        {pushEnabled&&<span style={{fontSize:10,background:"rgba(22,163,74,.15)",color:T.success,padding:"2px 8px",borderRadius:8,fontWeight:700}}>ON</span>}
+                      </div>
+                      <div style={{fontSize:12,color:T.muted,lineHeight:1.7,marginBottom:12}}>Get instant deadline reminders directly on your device — no phone number needed. Works on any browser or installed PWA.</div>
+                      <button className="bp" style={{width:"100%",fontSize:13,marginBottom:12,background:pushEnabled?T.danger:T.accent,opacity:pushLoading?0.6:1}}
+                        onClick={pushEnabled?unsubscribeFromPush:subscribeToPush}
+                        disabled={pushLoading}>
+                        {pushLoading?"Working...":(pushEnabled?"🔕 Disable Notifications":"🔔 Enable Push Notifications")}
+                      </button>
+                      <div style={{padding:"10px 12px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`,marginBottom:10}}>
+                        <div style={{fontSize:11,fontWeight:600,marginBottom:6}}>You'll receive notifications:</div>
+                        {[["3 days before","📚 Heads up — assignment coming up"],["1 day before","⚠️ Due tomorrow alert"],["Day of","🚨 Due today — don't forget to submit"]].map(([t,d])=>(
+                          <div key={t} style={{display:"flex",gap:8,padding:"5px 0",borderBottom:`1px solid ${T.border}`,alignItems:"center"}}>
+                            <span style={{fontSize:10,fontWeight:700,color:T.accent,minWidth:90,flexShrink:0}}>{t}</span>
+                            <span style={{fontSize:11,color:T.muted}}>{d}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{padding:"8px 12px",background:`rgba(${rgb},.06)`,borderRadius:8,border:`1px solid rgba(${rgb},.15)`}}>
+                        <div style={{fontSize:11,color:T.muted}}>💡 <strong style={{color:T.text}}>iOS users:</strong> Install ProPlan Scholar to your home screen via Safari → Share → Add to Home Screen, then enable notifications for best experience. Requires iOS 16.4+.</div>
                       </div>
                     </div>
                   )}
