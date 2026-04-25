@@ -3577,14 +3577,16 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
             </select>
           </div>
           <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Title</div><input className="ifield" placeholder="Assignment title" value={newAssign.title} onChange={e=>setNewAssign(a=>({...a,title:e.target.value}))}/></div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
-            <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Due Date</div><input type="date" className="ifield" value={newAssign.due} onChange={e=>setNewAssign(a=>({...a,due:e.target.value}))}/></div>
-            <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Type</div>
-              <select className="ifield" value={newAssign.type} onChange={e=>setNewAssign(a=>({...a,type:e.target.value}))}>
-                <option value="" disabled hidden>Select type...</option>
-                {["Paper","Exam","Case Study","Homework","Project","Discussion","Presentation","Lab","Quiz"].map(tp=><option key={tp} value={tp.toLowerCase().replace(" ","")}>{tp}</option>)}
-              </select>
-            </div>
+          <div>
+            <div style={{fontSize:11,color:T.muted,marginBottom:3}}>Due Date</div>
+            <input type="date" className="ifield" value={newAssign.due} onChange={e=>setNewAssign(a=>({...a,due:e.target.value}))} style={{fontSize:16}}/>
+          </div>
+          <div>
+            <div style={{fontSize:11,color:T.muted,marginBottom:3}}>Type</div>
+            <select className="ifield" value={newAssign.type} onChange={e=>setNewAssign(a=>({...a,type:e.target.value}))}>
+              <option value="" disabled hidden>Select type...</option>
+              {["Paper","Exam","Case Study","Homework","Project","Discussion","Presentation","Lab","Quiz"].map(tp=><option key={tp} value={tp.toLowerCase().replace(" ","")}>{tp}</option>)}
+            </select>
           </div>
           <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Estimated Hours: {newAssign.estHours}</div><input type="range" min={1} max={30} value={newAssign.estHours} onChange={e=>setNewAssign(a=>({...a,estHours:+e.target.value}))} style={{width:"100%",accentColor:T.accent}}/></div>
           <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Description / Notes <span style={{color:T.faint}}>(optional)</span></div><textarea className="ifield" rows={2} placeholder="Key topics, requirements, what to focus on..." value={newAssign.topics||""} onChange={e=>setNewAssign(a=>({...a,topics:e.target.value}))} style={{resize:"vertical",fontSize:12}}/></div>
@@ -3690,14 +3692,16 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
             </select>
           </div>
           <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Title</div><input className="ifield" value={editAssign.title} onChange={e=>setEditAssign(a=>({...a,title:e.target.value}))}/></div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
-            <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Due Date</div><input type="date" className="ifield" value={editAssign.due} onChange={e=>setEditAssign(a=>({...a,due:e.target.value}))}/></div>
-            <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Type</div>
-              <select className="ifield" value={editAssign.type} onChange={e=>setEditAssign(a=>({...a,type:e.target.value}))}>
-                <option value="" disabled hidden>Select type...</option>
-                {["Paper","Exam","Case Study","Homework","Project","Discussion","Presentation","Lab","Quiz"].map(tp=><option key={tp} value={tp.toLowerCase().replace(" ","")}>{tp}</option>)}
-              </select>
-            </div>
+          <div>
+            <div style={{fontSize:11,color:T.muted,marginBottom:3}}>Due Date</div>
+            <input type="date" className="ifield" value={editAssign.due} onChange={e=>setEditAssign(a=>({...a,due:e.target.value}))} style={{fontSize:16}}/>
+          </div>
+          <div>
+            <div style={{fontSize:11,color:T.muted,marginBottom:3}}>Type</div>
+            <select className="ifield" value={editAssign.type} onChange={e=>setEditAssign(a=>({...a,type:e.target.value}))}>
+              <option value="" disabled hidden>Select type...</option>
+              {["Paper","Exam","Case Study","Homework","Project","Discussion","Presentation","Lab","Quiz"].map(tp=><option key={tp} value={tp.toLowerCase().replace(" ","")}>{tp}</option>)}
+            </select>
           </div>
           <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Estimated Hours: {editAssign.estHours}</div><input type="range" min={1} max={30} value={editAssign.estHours} onChange={e=>setEditAssign(a=>({...a,estHours:+e.target.value}))} style={{width:"100%",accentColor:T.accent}}/></div>
           <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Description / Notes <span style={{color:T.faint}}>(optional)</span></div><textarea className="ifield" rows={2} value={editAssign.topics||""} onChange={e=>setEditAssign(a=>({...a,topics:e.target.value}))} style={{resize:"vertical",fontSize:12}} placeholder="Key topics, requirements, what to focus on..."/></div>
