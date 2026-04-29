@@ -8,7 +8,7 @@ const SUPA_KEY = import.meta.env.VITE_SUPABASE_ANON || "";
 const supabase = (SUPA_URL && SUPA_KEY)
   ? createClient(SUPA_URL, SUPA_KEY)
   : null;
-const ANTH_KEY = import.meta.env.VITE_ANTHROPIC_KEY || "";
+// API key is server-side only — calls go through /api/ai proxy
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const DAYS_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -93,13 +93,13 @@ const GREEK_ORGS=["Alpha Delta Pi","Alpha Kappa Alpha","Alpha Phi","Chi Omega","
 
 // ─── Claude API ───────────────────────────────────────────────────────────────
 async function callClaudeJSON(system,user,maxT=1500){
-  const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":ANTH_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:maxT,system,messages:[{role:"user",content:user}]})});
+  const res=await fetch("/api/ai",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:maxT,system,messages:[{role:"user",content:user}]})});
   const data=await res.json();
   const text=data.content?.map(b=>b.text||"").join("")||"";
   return JSON.parse(text.replace(/```json[\s\S]*?```|```/g,"").trim());
 }
 async function callClaudeChat(messages){
-  const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":ANTH_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages})});
+  const res=await fetch("/api/ai",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages})});
   const data=await res.json();
   return data.content?.map(b=>b.text||"").join("")||"Sorry, I could not respond.";
 }
@@ -1188,16 +1188,10 @@ export default function ProPlanScholar(){
           r.readAsDataURL(file);
         });
         setUploadMsg("Sending PDF to AI...");
-        // Check key is present before calling
-        const apiKey=import.meta.env.VITE_ANTHROPIC_KEY||"";
-        if(!apiKey){throw new Error("API key not found. Check VITE_ANTHROPIC_KEY in Vercel environment variables.");}
-        const resp=await fetch("https://api.anthropic.com/v1/messages",{
+        const resp=await fetch("/api/ai",{
           method:"POST",
           headers:{
             "Content-Type":"application/json",
-            "x-api-key":apiKey,
-            "anthropic-version":"2023-06-01",
-            "anthropic-dangerous-direct-browser-access":"true"
           },
           body:JSON.stringify({
             model:"claude-sonnet-4-20250514",
