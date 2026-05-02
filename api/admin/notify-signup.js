@@ -88,8 +88,18 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         from: FROM_EMAIL,
         to: [TO_EMAIL],
-        subject: `🎓 New ProPlan Scholar signup: ${name || email}`,
+        // Drop the leading emoji from the subject — emojis up front are a known
+        // spam-filter heuristic on Yahoo/Gmail. We keep the visual flair in the
+        // body, where it does not hurt deliverability.
+        subject: `New ProPlan Scholar signup: ${name || email}`,
+        // Reply-To routes any reply to the new student, so you can welcome them
+        // by simply hitting Reply in your inbox.
+        reply_to: email,
         html,
+        // Plain-text fallback — required for good Yahoo/Gmail deliverability.
+        text: `New ProPlan Scholar signup\n\nName: ${name || "(not provided)"}\nEmail: ${email}\nWhen: ${when} CT\n\nThey will need to confirm their email before they can sign in.\n\nManage users at https://supabase.com/dashboard`,
+        // Resend tag — lets you filter these messages in your Resend dashboard
+        tags: [{ name: "category", value: "admin-signup-notification" }],
       }),
     });
     const respText = await r.text();
