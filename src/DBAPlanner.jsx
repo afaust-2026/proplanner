@@ -8,7 +8,9 @@ const SUPA_KEY = import.meta.env.VITE_SUPABASE_ANON || "";
 const supabase = (SUPA_URL && SUPA_KEY)
   ? createClient(SUPA_URL, SUPA_KEY)
   : null;
-const ANTH_KEY = import.meta.env.VITE_ANTHROPIC_KEY || "";
+// SECURITY: the Anthropic key NEVER lives in the browser. All Claude calls go
+// through /api/claude/messages, which is a server-side proxy that holds the key.
+// (See api/claude/messages.js and SECURITY_FIX_setup.md.)
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const DAYS_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -92,15 +94,30 @@ const SPORTS_LIST=["Football","Basketball","Baseball","Softball","Soccer","Volle
 const GREEK_ORGS=["Alpha Delta Pi","Alpha Kappa Alpha","Alpha Phi","Chi Omega","Delta Delta Delta","Delta Gamma","Delta Sigma Theta","Gamma Phi Beta","Kappa Alpha Theta","Kappa Delta","Kappa Kappa Gamma","Pi Beta Phi","Sigma Gamma Rho","Zeta Phi Beta","Zeta Tau Alpha","Alpha Epsilon Pi","Alpha Phi Alpha","Beta Theta Pi","Delta Tau Delta","Kappa Alpha Order","Kappa Alpha Psi","Lambda Chi Alpha","Omega Psi Phi","Phi Beta Sigma","Phi Delta Theta","Pi Kappa Alpha","Pi Kappa Phi","Sigma Alpha Epsilon","Sigma Chi","Sigma Nu","Sigma Phi Epsilon","Tau Kappa Epsilon","Other"];
 
 // ─── Claude API ───────────────────────────────────────────────────────────────
+async function claudeProxy(payload){
+  // POST to our server-side proxy. The user's Supabase JWT proves they are signed in.
+  const{data:{session}}=await supabase.auth.getSession();
+  const token=session?.access_token||"";
+  if(!token)throw new Error("Not signed in. Please sign in to use AI features.");
+  const res=await fetch("/api/claude/messages",{
+    method:"POST",
+    headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
+    body:JSON.stringify(payload),
+  });
+  const data=await res.json().catch(()=>({error:{message:"Invalid response from AI proxy"}}));
+  if(!res.ok){
+    const msg=data?.error?.message||`AI proxy error (${res.status})`;
+    throw new Error(msg);
+  }
+  return data;
+}
 async function callClaudeJSON(system,user,maxT=1500){
-  const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":ANTH_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:maxT,system,messages:[{role:"user",content:user}]})});
-  const data=await res.json();
+  const data=await claudeProxy({model:"claude-sonnet-4-20250514",max_tokens:maxT,system,messages:[{role:"user",content:user}]});
   const text=data.content?.map(b=>b.text||"").join("")||"";
   return JSON.parse(text.replace(/```json[\s\S]*?```|```/g,"").trim());
 }
 async function callClaudeChat(messages){
-  const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":ANTH_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages})});
-  const data=await res.json();
+  const data=await claudeProxy({model:"claude-sonnet-4-20250514",max_tokens:1000,messages});
   return data.content?.map(b=>b.text||"").join("")||"Sorry, I could not respond.";
 }
 
@@ -1130,12 +1147,12 @@ export default function ProPlanScholar(){
   // Core handler — accepts a File object directly (used by both file picker AND drag-and-drop)
   async function processSyllabusFile(file){
     if(!file)return;
-    // Fast-fail BEFORE turning on the loader so the books animation doesn't flash
-    // for environments missing the Anthropic API key.
-    const apiKey=import.meta.env.VITE_ANTHROPIC_KEY||"";
-    if(!apiKey){
-      setUploadMsg("Error: API key not found. Check VITE_ANTHROPIC_KEY in Vercel environment variables.");
-      notify("Cannot analyze syllabus — API key is missing.");
+    // Fast-fail if the user isn't signed in — the server proxy will reject anyway,
+    // but checking here lets us avoid the loader flash and show a clearer message.
+    const{data:{session:_sess}}=await supabase.auth.getSession();
+    if(!_sess?.access_token){
+      setUploadMsg("Please sign in to analyze a syllabus.");
+      notify("You need to be signed in to analyze a syllabus.");
       return;
     }
     setUploading(true);setUploadMsg("Reading file...");
@@ -1161,23 +1178,15 @@ export default function ProPlanScholar(){
         // Re-use base64 (FileReader was already called above)
         const base64=originalB64;
         setUploadMsg("Sending PDF to AI...");
-        // (API key was already verified at the top of processSyllabusFile)
-        const resp=await fetch("https://api.anthropic.com/v1/messages",{
-          method:"POST",
-          headers:{
-            "Content-Type":"application/json",
-            "x-api-key":apiKey,
-            "anthropic-version":"2023-06-01",
-            "anthropic-dangerous-direct-browser-access":"true"
-          },
-          body:JSON.stringify({
-            model:"claude-sonnet-4-20250514",
-            max_tokens:2000,
-            messages:[{
-              role:"user",
-              content:[
-                {type:"document",source:{type:"base64",media_type:"application/pdf",data:base64}},
-                {type:"text",text:`You are parsing an academic course syllabus. Extract the course name, professor name, and ALL assignments/exams/deliverables with their due dates.
+        // Goes through the server proxy — the Anthropic key never touches the browser.
+        const data=await claudeProxy({
+          model:"claude-sonnet-4-20250514",
+          max_tokens:2000,
+          messages:[{
+            role:"user",
+            content:[
+              {type:"document",source:{type:"base64",media_type:"application/pdf",data:base64}},
+              {type:"text",text:`You are parsing an academic course syllabus. Extract the course name, professor name, and ALL assignments/exams/deliverables with their due dates.
 
 Return ONLY a valid JSON object — no explanation, no markdown, no backticks. Just raw JSON:
 {
@@ -1208,16 +1217,9 @@ For estHours, estimate the BASE hours to complete the assignment (not including 
 Assume year ${new Date().getFullYear()} when no year is specified.
 If a due date is unclear, make your best guess based on context.
 Return ONLY the JSON object, nothing else.`}
-              ]
-            }]
-          })
+            ]
+          }]
         });
-        if(!resp.ok){
-          const errText=await resp.text();
-          throw new Error(`API error ${resp.status}: ${errText}`);
-        }
-        const data=await resp.json();
-        if(data.error){throw new Error(`Claude error: ${data.error.message}`);}
         const rawText=data.content?.map(b=>b.text||"").join("")||"";
         setUploadMsg("Parsing results...");
         // Clean up response and parse JSON
