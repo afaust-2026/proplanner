@@ -113,7 +113,7 @@ function buildTheme(primary,dark){
 
 // ─── AUTH SCREEN ──────────────────────────────────────────────────────────────
 function AuthScreen({onAuth}){
-  const[mode,setMode]=useState("login"); // "login" | "signup" | "forgot" | "reset"
+  const[mode,setMode]=useState("login"); // "login" | "signup" | "forgot" | "reset" | "mfa"
   const[email,setEmail]=useState("");
   const[password,setPassword]=useState("");
   const[confirmPassword,setConfirmPassword]=useState("");
@@ -121,6 +121,14 @@ function AuthScreen({onAuth}){
   const[loading,setLoading]=useState(false);
   const[error,setError]=useState("");
   const[success,setSuccess]=useState("");
+
+  // Show/hide password toggles
+  const[showPw,setShowPw]=useState(false);
+  const[showConfirmPw,setShowConfirmPw]=useState(false);
+
+  // MFA state
+  const[mfaCode,setMfaCode]=useState("");
+  const[mfaFactorId,setMfaFactorId]=useState(null);
 
   // Check URL for password reset token on mount
   const[resetToken,setResetToken]=useState(null);
@@ -173,16 +181,76 @@ function AuthScreen({onAuth}){
       }
     }else{
       const{data,error:e}=await supabase.auth.signInWithPassword({email,password});
-      if(e)setError(e.message);
-      else onAuth(data.user);
+      if(e){setError(e.message);}
+      else{
+        // Check if user has MFA enrolled
+        const{data:aal}=await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        if(aal?.nextLevel==="aal2"&&aal?.currentLevel!=="aal2"){
+          // MFA is required — find the TOTP factor and prompt for code
+          const{data:factors}=await supabase.auth.mfa.listFactors();
+          const totp=factors?.totp?.[0];
+          if(totp){setMfaFactorId(totp.id);setMode("mfa");}
+          else onAuth(data.user);
+        }else{
+          onAuth(data.user);
+        }
+      }
     }
     setLoading(false);
   }
 
-  function switchMode(m){setMode(m);setError("");setSuccess("");setPassword("");setConfirmPassword("");}
+  async function submitMfa(){
+    setError("");setLoading(true);
+    const{data:challenge}=await supabase.auth.mfa.challenge({factorId:mfaFactorId});
+    const{error:e}=await supabase.auth.mfa.verify({factorId:mfaFactorId,challengeId:challenge.id,code:mfaCode});
+    if(e)setError("Invalid code. Please try again.");
+    else{
+      const{data:{session}}=await supabase.auth.getSession();
+      if(session?.user)onAuth(session.user);
+    }
+    setLoading(false);
+  }
+
+  function switchMode(m){setMode(m);setError("");setSuccess("");setPassword("");setConfirmPassword("");setMfaCode("");}
 
   const inp={width:"100%",background:"#0f0f13",border:"1px solid #2a2a38",borderRadius:8,padding:"10px 13px",color:"#e8e3d8",fontSize:14,outline:"none",fontFamily:"inherit",marginBottom:2};
   const btnPrimary={width:"100%",background:"#6366f1",color:"#fff",border:"none",borderRadius:10,padding:"13px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .2s"};
+
+  // Password field with show/hide toggle
+  function PwField({value,onChange,placeholder,show,onToggle,onKeyDown}){
+    return(
+      <div style={{position:"relative"}}>
+        <input value={value} onChange={onChange} type={show?"text":"password"} placeholder={placeholder||"••••••••"} onKeyDown={onKeyDown} style={{...inp,paddingRight:42}}/>
+        <button type="button" onClick={onToggle} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#7a7590",fontSize:16,padding:2,lineHeight:1}}>
+          {show?"🙈":"👁️"}
+        </button>
+      </div>
+    );
+  }
+
+  // MFA screen
+  if(mode==="mfa") return(
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#0f0f13 0%,#1a1a2e 100%)",fontFamily:"'Inter',system-ui,sans-serif"}}>
+      <div style={{width:"min(92vw,420px)",padding:"clamp(24px,5vw,40px) clamp(18px,4vw,36px)",background:"#16161f",borderRadius:20,border:"1px solid #2a2a38",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
+        <div style={{textAlign:"center",marginBottom:28}}>
+          <div style={{fontSize:40,marginBottom:10}}>🔐</div>
+          <div style={{fontSize:22,fontWeight:700,color:"#e8e3d8"}}>Two-Factor Authentication</div>
+          <div style={{fontSize:12,color:"#7a7590",marginTop:5,lineHeight:1.6}}>Enter the 6-digit code from your authenticator app.</div>
+        </div>
+        <div style={{marginBottom:22}}>
+          <div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>Verification Code</div>
+          <input value={mfaCode} onChange={e=>setMfaCode(e.target.value.replace(/\D/g,"").slice(0,6))} type="text" inputMode="numeric" placeholder="000000" maxLength={6} onKeyDown={e=>e.key==="Enter"&&submitMfa()} style={{...inp,fontSize:24,letterSpacing:8,textAlign:"center"}} autoFocus/>
+        </div>
+        {error&&<div style={{fontSize:12,color:"#ef4444",background:"rgba(239,68,68,.1)",padding:"9px 13px",borderRadius:8,marginBottom:14,border:"1px solid rgba(239,68,68,.3)"}}>{error}</div>}
+        <button onClick={submitMfa} disabled={loading||mfaCode.length!==6} style={{...btnPrimary,opacity:loading||mfaCode.length!==6?0.6:1}}>
+          {loading?"Verifying...":"Verify & Sign In →"}
+        </button>
+        <div style={{textAlign:"center",marginTop:14}}>
+          <span onClick={()=>{setMode("login");setMfaCode("");setError("");}} style={{fontSize:12,color:"#7a7590",cursor:"pointer"}}>← Back to Sign In</span>
+        </div>
+      </div>
+    </div>
+  );
 
   // ── Reset password screen ──────────────────────────────────────────────────
   if(mode==="reset") return(
@@ -193,8 +261,8 @@ function AuthScreen({onAuth}){
           <div style={{fontSize:22,fontWeight:700,color:"#e8e3d8"}}>Set New Password</div>
           <div style={{fontSize:12,color:"#7a7590",marginTop:5}}>Choose a strong password for your account</div>
         </div>
-        <div style={{marginBottom:14}}><div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>New Password</div><input value={password} onChange={e=>setPassword(e.target.value)} type="password" placeholder="At least 6 characters" style={inp}/></div>
-        <div style={{marginBottom:22}}><div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>Confirm New Password</div><input value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} type="password" placeholder="Repeat your new password" onKeyDown={e=>e.key==="Enter"&&submit()} style={inp}/></div>
+        <div style={{marginBottom:14}}><div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>New Password</div><PwField value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 6 characters" show={showPw} onToggle={()=>setShowPw(v=>!v)}/></div>
+        <div style={{marginBottom:22}}><div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>Confirm New Password</div><PwField value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} placeholder="Repeat your new password" show={showConfirmPw} onToggle={()=>setShowConfirmPw(v=>!v)} onKeyDown={e=>e.key==="Enter"&&submit()}/></div>
         {/* Password strength indicator */}
         {password.length>0&&(
           <div style={{marginBottom:14}}>
@@ -266,7 +334,7 @@ function AuthScreen({onAuth}){
         <div style={{marginBottom:14}}><div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>Email</div><input value={email} onChange={e=>setEmail(e.target.value)} type="email" placeholder="you@university.edu" style={inp}/></div>
         <div style={{marginBottom:mode==="login"?8:22}}>
           <div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>Password</div>
-          <input value={password} onChange={e=>setPassword(e.target.value)} type="password" placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&submit()} style={inp}/>
+          <PwField value={password} onChange={e=>setPassword(e.target.value)} show={showPw} onToggle={()=>setShowPw(v=>!v)} onKeyDown={e=>e.key==="Enter"&&submit()}/>
         </div>
         {/* Forgot password link — only on login */}
         {mode==="login"&&(
