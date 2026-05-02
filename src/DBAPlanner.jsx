@@ -142,7 +142,7 @@ function buildTheme(primary,dark){
 
 // ─── AUTH SCREEN ──────────────────────────────────────────────────────────────
 function AuthScreen({onAuth}){
-  const[mode,setMode]=useState("login"); // "login" | "signup" | "forgot" | "reset"
+  const[mode,setMode]=useState("login"); // "login" | "signup" | "forgot" | "reset" | "mfa"
   const[email,setEmail]=useState("");
   const[password,setPassword]=useState("");
   const[confirmPassword,setConfirmPassword]=useState("");
@@ -150,6 +150,13 @@ function AuthScreen({onAuth}){
   const[loading,setLoading]=useState(false);
   const[error,setError]=useState("");
   const[success,setSuccess]=useState("");
+  // Password visibility toggles (separate per field so they don't all reveal at once)
+  const[showPwd,setShowPwd]=useState(false);
+  const[showConfirmPwd,setShowConfirmPwd]=useState(false);
+  // MFA challenge state — set after a successful password login if the user has TOTP enrolled
+  const[mfaCode,setMfaCode]=useState("");
+  const[mfaFactor,setMfaFactor]=useState(null); // {id, friendly_name}
+  const[mfaChallenge,setMfaChallenge]=useState(null); // {id}
 
   // Check URL for password reset token on mount
   const[resetToken,setResetToken]=useState(null);
@@ -200,10 +207,47 @@ function AuthScreen({onAuth}){
           });
         },1500);
       }
+    }else if(mode==="mfa"){
+      // Verify the 6-digit TOTP code to elevate to aal2 and complete sign-in
+      if(!mfaCode||mfaCode.length<6){setError("Enter the 6-digit code from your authenticator app.");setLoading(false);return;}
+      try{
+        const{data:v,error:ve}=await supabase.auth.mfa.verify({factorId:mfaFactor.id,challengeId:mfaChallenge.id,code:mfaCode.trim()});
+        if(ve)throw ve;
+        // verify returns a fresh session; pull current user and finish
+        const{data:{session}}=await supabase.auth.getSession();
+        if(session?.user)onAuth(session.user);
+        else setError("Verified, but no session found. Please sign in again.");
+      }catch(err){
+        setError(err?.message||"Invalid code. Please try again.");
+        setMfaCode("");
+      }
     }else{
+      // Standard email + password sign-in. After it succeeds, check if MFA is required.
       const{data,error:e}=await supabase.auth.signInWithPassword({email,password});
-      if(e)setError(e.message);
-      else onAuth(data.user);
+      if(e){setError(e.message);setLoading(false);return;}
+      try{
+        const{data:aal}=await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        if(aal?.nextLevel==="aal2"&&aal?.currentLevel!=="aal2"){
+          // User has TOTP enrolled — fetch the factor and start a challenge
+          const{data:factors}=await supabase.auth.mfa.listFactors();
+          const verifiedTotp=(factors?.totp||[]).find(f=>f.status==="verified")||factors?.totp?.[0];
+          if(verifiedTotp){
+            const{data:ch,error:che}=await supabase.auth.mfa.challenge({factorId:verifiedTotp.id});
+            if(che)throw che;
+            setMfaFactor(verifiedTotp);
+            setMfaChallenge(ch);
+            setMode("mfa");
+            setLoading(false);
+            return;
+          }
+        }
+        // No MFA needed — straight in
+        onAuth(data.user);
+      }catch(mfaErr){
+        // If MFA check itself failed, surface the error but don't proceed with elevated session
+        console.error("MFA check failed:",mfaErr);
+        setError(mfaErr?.message||"Could not verify two-factor status. Please try again.");
+      }
     }
     setLoading(false);
   }
@@ -222,8 +266,20 @@ function AuthScreen({onAuth}){
           <div style={{fontSize:22,fontWeight:700,color:"#e8e3d8"}}>Set New Password</div>
           <div style={{fontSize:12,color:"#7a7590",marginTop:5}}>Choose a strong password for your account</div>
         </div>
-        <div style={{marginBottom:14}}><div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>New Password</div><input value={password} onChange={e=>setPassword(e.target.value)} type="password" placeholder="At least 6 characters" style={inp}/></div>
-        <div style={{marginBottom:22}}><div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>Confirm New Password</div><input value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} type="password" placeholder="Repeat your new password" onKeyDown={e=>e.key==="Enter"&&submit()} style={inp}/></div>
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>New Password</div>
+          <div style={{position:"relative"}}>
+            <input value={password} onChange={e=>setPassword(e.target.value)} type={showPwd?"text":"password"} placeholder="At least 6 characters" style={{...inp,paddingRight:42}} autoComplete="new-password"/>
+            <button type="button" onClick={()=>setShowPwd(s=>!s)} aria-label={showPwd?"Hide password":"Show password"} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"transparent",border:"none",color:"#7a7590",cursor:"pointer",padding:"6px 8px",fontSize:16,lineHeight:1,fontFamily:"inherit"}}>{showPwd?"🙈":"👁"}</button>
+          </div>
+        </div>
+        <div style={{marginBottom:22}}>
+          <div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>Confirm New Password</div>
+          <div style={{position:"relative"}}>
+            <input value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} type={showConfirmPwd?"text":"password"} placeholder="Repeat your new password" onKeyDown={e=>e.key==="Enter"&&submit()} style={{...inp,paddingRight:42}} autoComplete="new-password"/>
+            <button type="button" onClick={()=>setShowConfirmPwd(s=>!s)} aria-label={showConfirmPwd?"Hide password":"Show password"} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"transparent",border:"none",color:"#7a7590",cursor:"pointer",padding:"6px 8px",fontSize:16,lineHeight:1,fontFamily:"inherit"}}>{showConfirmPwd?"🙈":"👁"}</button>
+          </div>
+        </div>
         {/* Password strength indicator */}
         {password.length>0&&(
           <div style={{marginBottom:14}}>
@@ -275,6 +331,40 @@ function AuthScreen({onAuth}){
     </div>
   );
 
+  // ── MFA challenge screen ───────────────────────────────────────────────────
+  if(mode==="mfa") return(
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#0f0f13 0%,#1a1a2e 100%)",fontFamily:"'Inter',system-ui,sans-serif"}}>
+      <div style={{width:"min(92vw,420px)",padding:"clamp(24px,5vw,40px) clamp(18px,4vw,36px)",background:"#16161f",borderRadius:20,border:"1px solid #2a2a38",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
+        <div style={{textAlign:"center",marginBottom:28}}>
+          <div style={{fontSize:40,marginBottom:10}}>🔐</div>
+          <div style={{fontSize:22,fontWeight:700,color:"#e8e3d8"}}>Two-Factor Authentication</div>
+          <div style={{fontSize:12,color:"#7a7590",marginTop:6,lineHeight:1.6}}>Open your authenticator app and enter the 6-digit code for ProPlan Scholar.</div>
+        </div>
+        <div style={{marginBottom:18}}>
+          <div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>6-digit Code</div>
+          <input
+            value={mfaCode}
+            onChange={e=>setMfaCode(e.target.value.replace(/\D/g,"").slice(0,6))}
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            placeholder="000000"
+            onKeyDown={e=>e.key==="Enter"&&submit()}
+            style={{...inp,fontSize:22,letterSpacing:8,textAlign:"center",fontFamily:"'SF Mono','Monaco','Menlo',monospace"}}
+            autoFocus/>
+        </div>
+        {error&&<div style={{fontSize:12,color:"#ef4444",background:"rgba(239,68,68,.1)",padding:"9px 13px",borderRadius:8,marginBottom:14,border:"1px solid rgba(239,68,68,.3)"}}>{error}</div>}
+        <button onClick={submit} disabled={loading||mfaCode.length<6} style={{...btnPrimary,opacity:loading||mfaCode.length<6?0.6:1,marginBottom:10}}>
+          {loading?"Verifying...":"Verify and Sign In →"}
+        </button>
+        <button onClick={()=>{setMode("login");setMfaCode("");setMfaFactor(null);setMfaChallenge(null);setError("");}} style={{width:"100%",background:"transparent",border:"none",color:"#7a7590",fontSize:12,cursor:"pointer",fontFamily:"inherit",padding:"6px"}}>← Back to sign in</button>
+        <div style={{fontSize:11,color:"#7a7590",marginTop:18,textAlign:"center",lineHeight:1.6}}>
+          Lost access to your authenticator? Contact <a href="mailto:hello@proplanscholar.com" style={{color:"#a78bfa",textDecoration:"none"}}>hello@proplanscholar.com</a> for help.
+        </div>
+      </div>
+    </div>
+  );
+
   // ── Login / Signup screen ──────────────────────────────────────────────────
   return(
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#0f0f13 0%,#1a1a2e 100%)",fontFamily:"'Inter',system-ui,sans-serif"}}>
@@ -295,7 +385,10 @@ function AuthScreen({onAuth}){
         <div style={{marginBottom:14}}><div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>Email</div><input value={email} onChange={e=>setEmail(e.target.value)} type="email" placeholder="you@university.edu" style={inp}/></div>
         <div style={{marginBottom:mode==="login"?8:22}}>
           <div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>Password</div>
-          <input value={password} onChange={e=>setPassword(e.target.value)} type="password" placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&submit()} style={inp}/>
+          <div style={{position:"relative"}}>
+            <input value={password} onChange={e=>setPassword(e.target.value)} type={showPwd?"text":"password"} placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&submit()} style={{...inp,paddingRight:42}} autoComplete={mode==="signup"?"new-password":"current-password"}/>
+            <button type="button" onClick={()=>setShowPwd(s=>!s)} aria-label={showPwd?"Hide password":"Show password"} title={showPwd?"Hide password":"Show password"} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"transparent",border:"none",color:"#7a7590",cursor:"pointer",padding:"6px 8px",fontSize:16,lineHeight:1,fontFamily:"inherit"}}>{showPwd?"🙈":"👁"}</button>
+          </div>
         </div>
         {/* Forgot password link — only on login */}
         {mode==="login"&&(
@@ -559,6 +652,11 @@ export default function ProPlanScholar(){
   const[loaderMsgIndex,setLoaderMsgIndex]=useState(0);
   const[isDragging,setIsDragging]=useState(false);
   const[showSyllabusViewer,setShowSyllabusViewer]=useState(null); // course object
+  // MFA (Two-Factor Authentication) state for the Settings tile + enrollment modal
+  const[mfaFactors,setMfaFactors]=useState([]); // existing factors from supabase.auth.mfa.listFactors()
+  const[showMfaEnroll,setShowMfaEnroll]=useState(null); // {id, qr_code, secret} when mid-enrollment
+  const[mfaEnrollCode,setMfaEnrollCode]=useState("");
+  const[mfaBusy,setMfaBusy]=useState(false);
   const[feedbackText,setFeedbackText]=useState("");
   const[feedbackType,setFeedbackType]=useState("suggestion");
   const[feedbackSent,setFeedbackSent]=useState(false);
@@ -1419,6 +1517,80 @@ Return ONLY the JSON object, nothing else.`}
     const id=setInterval(()=>setLoaderMsgIndex(i=>i+1),2200);
     return()=>clearInterval(id);
   },[uploading]);
+
+  // ── MFA (Two-Factor Authentication) ─────────────────────────────────────
+  // Load this user's existing TOTP factors so we can show enabled/disabled state
+  async function refreshMfaFactors(){
+    try{
+      const{data,error}=await supabase.auth.mfa.listFactors();
+      if(error)throw error;
+      setMfaFactors(data?.totp||[]);
+    }catch(err){
+      console.warn("Could not load MFA factors:",err);
+    }
+  }
+  useEffect(()=>{if(authUser)refreshMfaFactors();},[authUser?.id]);
+
+  // Begin enrollment: ask Supabase for a new TOTP factor + QR code
+  async function startMfaEnroll(){
+    setMfaBusy(true);
+    try{
+      const{data,error}=await supabase.auth.mfa.enroll({factorType:"totp",friendlyName:`ProPlan Scholar (${new Date().toLocaleDateString()})`});
+      if(error)throw error;
+      // data: { id, type:"totp", totp:{ qr_code:"<svg>...</svg>", secret:"...", uri:"..." } }
+      setShowMfaEnroll({factorId:data.id,qrSvg:data.totp.qr_code,secret:data.totp.secret,uri:data.totp.uri});
+      setMfaEnrollCode("");
+    }catch(err){
+      notify(`Could not start MFA enrollment: ${err.message||err}`);
+    }finally{
+      setMfaBusy(false);
+    }
+  }
+
+  // Verify the 6-digit code to finish enrollment
+  async function verifyMfaEnroll(){
+    if(!showMfaEnroll||mfaEnrollCode.length<6)return;
+    setMfaBusy(true);
+    try{
+      const{data:ch,error:che}=await supabase.auth.mfa.challenge({factorId:showMfaEnroll.factorId});
+      if(che)throw che;
+      const{error:ve}=await supabase.auth.mfa.verify({factorId:showMfaEnroll.factorId,challengeId:ch.id,code:mfaEnrollCode.trim()});
+      if(ve)throw ve;
+      setShowMfaEnroll(null);
+      setMfaEnrollCode("");
+      await refreshMfaFactors();
+      notify("Two-factor authentication enabled!");
+    }catch(err){
+      notify(`Invalid code: ${err.message||"please try again"}`);
+      setMfaEnrollCode("");
+    }finally{
+      setMfaBusy(false);
+    }
+  }
+
+  async function cancelMfaEnroll(){
+    if(showMfaEnroll){
+      // Remove the unverified factor we just created so it doesn't linger
+      try{await supabase.auth.mfa.unenroll({factorId:showMfaEnroll.factorId});}catch{}
+    }
+    setShowMfaEnroll(null);
+    setMfaEnrollCode("");
+  }
+
+  async function disableMfa(factorId){
+    if(!confirm("Disable two-factor authentication? Your account will be less secure."))return;
+    setMfaBusy(true);
+    try{
+      const{error}=await supabase.auth.mfa.unenroll({factorId});
+      if(error)throw error;
+      await refreshMfaFactors();
+      notify("Two-factor authentication disabled.");
+    }catch(err){
+      notify(`Could not disable MFA: ${err.message||err}`);
+    }finally{
+      setMfaBusy(false);
+    }
+  }
 
   // ── Push notifications ────────────────────────────────────────────────────
   // VAPID public key from Vercel env (matches the private key the cron uses)
@@ -2339,7 +2511,45 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
         );
       })()}
 
-      {/* ── Syllabus viewer modal ─────────────────────────── */}
+      {/* ── MFA enrollment modal (TOTP setup) ─────────────────── */}
+      {showMfaEnroll&&(
+        <div className="syl-overlay" role="dialog" aria-label="Set up two-factor authentication" onClick={cancelMfaEnroll}>
+          <div className="syl-modal" style={{maxWidth:440,textAlign:"left",padding:"22px 22px 18px"}} onClick={e=>e.stopPropagation()}>
+            <div style={{textAlign:"center",marginBottom:14}}>
+              <div style={{fontSize:32,marginBottom:6}}>🔐</div>
+              <div style={{fontWeight:700,fontSize:16,color:T.text}}>Set Up Two-Factor Authentication</div>
+              <div style={{fontSize:12,color:T.muted,marginTop:4,lineHeight:1.6}}>Scan this QR code with Google Authenticator, Authy, 1Password, or any TOTP app.</div>
+            </div>
+            <div style={{background:"#fff",borderRadius:12,padding:16,marginBottom:12,display:"flex",justifyContent:"center"}}>
+              <div style={{width:200,height:200}} dangerouslySetInnerHTML={{__html:showMfaEnroll.qrSvg}}/>
+            </div>
+            <div style={{padding:"10px 12px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`,marginBottom:12}}>
+              <div style={{fontSize:10,color:T.muted,marginBottom:4,letterSpacing:1,textTransform:"uppercase"}}>Or enter this secret manually</div>
+              <div style={{fontFamily:"'SF Mono','Monaco','Menlo',monospace",fontSize:12,color:T.text,wordBreak:"break-all",userSelect:"all"}}>{showMfaEnroll.secret}</div>
+            </div>
+            <div style={{marginBottom:14}}>
+              <div style={{fontSize:11,color:T.muted,marginBottom:5}}>Enter the 6-digit code from your app to confirm</div>
+              <input
+                value={mfaEnrollCode}
+                onChange={e=>setMfaEnrollCode(e.target.value.replace(/\D/g,"").slice(0,6))}
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="000000"
+                onKeyDown={e=>e.key==="Enter"&&verifyMfaEnroll()}
+                className="ifield"
+                style={{fontSize:22,letterSpacing:8,textAlign:"center",fontFamily:"'SF Mono','Monaco','Menlo',monospace"}}
+                autoFocus/>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button className="bg2" style={{flex:1}} onClick={cancelMfaEnroll} disabled={mfaBusy}>Cancel</button>
+              <button className="bp" style={{flex:1}} onClick={verifyMfaEnroll} disabled={mfaBusy||mfaEnrollCode.length<6}>{mfaBusy?"Verifying...":"Verify and Enable"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+            {/* ── Syllabus viewer modal ─────────────────────────── */}
       {showSyllabusViewer&&(()=>{
         const c=showSyllabusViewer;
         const s=c.syllabus_data;
@@ -3895,6 +4105,35 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                     </div>
                   )}
                 </div>
+                {/* Two-Factor Authentication */}
+                <div className="card" style={{borderLeft:`3px solid ${T.accent}`}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+                    <span style={{fontSize:18}}>🔐</span>
+                    <div style={{fontWeight:700,flex:1}}>Two-Factor Authentication</div>
+                    {mfaFactors.some(f=>f.status==="verified")
+                      ?<span style={{fontSize:10,padding:"2px 8px",borderRadius:12,background:`rgba(${hexToRgb(T.success)},.15)`,color:T.success,fontWeight:700,letterSpacing:.5}}>ENABLED</span>
+                      :<span style={{fontSize:10,padding:"2px 8px",borderRadius:12,background:T.subcard,color:T.muted,fontWeight:600,letterSpacing:.5}}>OFF</span>}
+                  </div>
+                  <div style={{fontSize:12,color:T.muted,marginBottom:12,lineHeight:1.6}}>
+                    Add an extra layer of protection to your account. After signing in with your password, you will also enter a 6-digit code from an authenticator app like Google Authenticator, Authy, or 1Password.
+                  </div>
+                  {mfaFactors.filter(f=>f.status==="verified").length===0&&(
+                    <button onClick={startMfaEnroll} disabled={mfaBusy} className="bp" style={{width:"100%",fontSize:13,opacity:mfaBusy?0.6:1}}>
+                      {mfaBusy?"Working...":"Enable Two-Factor Authentication"}
+                    </button>
+                  )}
+                  {mfaFactors.filter(f=>f.status==="verified").map(f=>(
+                    <div key={f.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`,marginBottom:8}}>
+                      <span style={{fontSize:18}}>📱</span>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontWeight:600,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.friendly_name||"Authenticator app"}</div>
+                        <div style={{fontSize:10,color:T.muted}}>Active since {f.created_at?new Date(f.created_at).toLocaleDateString():"recently"}</div>
+                      </div>
+                      <button onClick={()=>disableMfa(f.id)} disabled={mfaBusy} style={{background:"transparent",border:`1px solid ${T.danger}`,borderRadius:7,padding:"6px 10px",fontSize:11,color:T.danger,cursor:mfaBusy?"wait":"pointer",fontFamily:"inherit",flexShrink:0,opacity:mfaBusy?0.5:1}}>Disable</button>
+                    </div>
+                  ))}
+                </div>
+
                 {/* Sign Out */}
                 <div className="card" style={{borderLeft:`3px solid ${T.danger}`}}>
                   <div style={{fontWeight:700,marginBottom:6,color:T.danger}}>Account</div>
