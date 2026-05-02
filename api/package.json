@@ -1,7 +1,8 @@
 {
   "name": "proplan-scholar-api",
   "version": "1.0.0",
-  "type": "module",
+  "private": true,
+  "description": "Vercel serverless functions for ProPlan Scholar (digest, sms, push, calendar).",
   "dependencies": {
     "web-push": "^3.6.7"
   }
