@@ -8,7 +8,7 @@ const SUPA_KEY = import.meta.env.VITE_SUPABASE_ANON || "";
 const supabase = (SUPA_URL && SUPA_KEY)
   ? createClient(SUPA_URL, SUPA_KEY)
   : null;
-// API key is server-side only — calls go through /api/ai proxy
+const ANTH_KEY = import.meta.env.VITE_ANTHROPIC_KEY || "";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const DAYS_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -93,13 +93,13 @@ const GREEK_ORGS=["Alpha Delta Pi","Alpha Kappa Alpha","Alpha Phi","Chi Omega","
 
 // ─── Claude API ───────────────────────────────────────────────────────────────
 async function callClaudeJSON(system,user,maxT=1500){
-  const res=await fetch("/api/ai",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:maxT,system,messages:[{role:"user",content:user}]})});
+  const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":ANTH_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:maxT,system,messages:[{role:"user",content:user}]})});
   const data=await res.json();
   const text=data.content?.map(b=>b.text||"").join("")||"";
   return JSON.parse(text.replace(/```json[\s\S]*?```|```/g,"").trim());
 }
 async function callClaudeChat(messages){
-  const res=await fetch("/api/ai",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages})});
+  const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":ANTH_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages})});
   const data=await res.json();
   return data.content?.map(b=>b.text||"").join("")||"Sorry, I could not respond.";
 }
@@ -112,21 +112,8 @@ function buildTheme(primary,dark){
 }
 
 // ─── AUTH SCREEN ──────────────────────────────────────────────────────────────
-// Standalone component — must be outside AuthScreen to prevent focus loss on re-render
-function PwField({value,onChange,placeholder,show,onToggle,onKeyDown}){
-  const inp={width:"100%",background:"#0f0f13",border:"1px solid #2a2a38",borderRadius:8,padding:"10px 13px",color:"#e8e3d8",fontSize:14,outline:"none",fontFamily:"inherit",marginBottom:2};
-  return(
-    <div style={{position:"relative"}}>
-      <input value={value} onChange={onChange} type={show?"text":"password"} placeholder={placeholder||"••••••••"} onKeyDown={onKeyDown} style={{...inp,paddingRight:42}}/>
-      <button type="button" onClick={onToggle} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#7a7590",fontSize:16,padding:2,lineHeight:1}}>
-        {show?"🙈":"👁️"}
-      </button>
-    </div>
-  );
-}
-
 function AuthScreen({onAuth}){
-  const[mode,setMode]=useState("login"); // "login" | "signup" | "forgot" | "reset" | "mfa"
+  const[mode,setMode]=useState("login"); // "login" | "signup" | "forgot" | "reset"
   const[email,setEmail]=useState("");
   const[password,setPassword]=useState("");
   const[confirmPassword,setConfirmPassword]=useState("");
@@ -134,14 +121,6 @@ function AuthScreen({onAuth}){
   const[loading,setLoading]=useState(false);
   const[error,setError]=useState("");
   const[success,setSuccess]=useState("");
-
-  // Show/hide password toggles
-  const[showPw,setShowPw]=useState(false);
-  const[showConfirmPw,setShowConfirmPw]=useState(false);
-
-  // MFA state
-  const[mfaCode,setMfaCode]=useState("");
-  const[mfaFactorId,setMfaFactorId]=useState(null);
 
   // Check URL for password reset token on mount
   const[resetToken,setResetToken]=useState(null);
@@ -194,64 +173,16 @@ function AuthScreen({onAuth}){
       }
     }else{
       const{data,error:e}=await supabase.auth.signInWithPassword({email,password});
-      if(e){setError(e.message);}
-      else{
-        // Check if user has MFA enrolled
-        const{data:aal}=await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-        if(aal?.nextLevel==="aal2"&&aal?.currentLevel!=="aal2"){
-          // MFA is required — find the TOTP factor and prompt for code
-          const{data:factors}=await supabase.auth.mfa.listFactors();
-          const totp=factors?.totp?.[0];
-          if(totp){setMfaFactorId(totp.id);setMode("mfa");}
-          else onAuth(data.user);
-        }else{
-          onAuth(data.user);
-        }
-      }
+      if(e)setError(e.message);
+      else onAuth(data.user);
     }
     setLoading(false);
   }
 
-  async function submitMfa(){
-    setError("");setLoading(true);
-    const{data:challenge}=await supabase.auth.mfa.challenge({factorId:mfaFactorId});
-    const{error:e}=await supabase.auth.mfa.verify({factorId:mfaFactorId,challengeId:challenge.id,code:mfaCode});
-    if(e)setError("Invalid code. Please try again.");
-    else{
-      const{data:{session}}=await supabase.auth.getSession();
-      if(session?.user)onAuth(session.user);
-    }
-    setLoading(false);
-  }
-
-  function switchMode(m){setMode(m);setError("");setSuccess("");setPassword("");setConfirmPassword("");setMfaCode("");}
+  function switchMode(m){setMode(m);setError("");setSuccess("");setPassword("");setConfirmPassword("");}
 
   const inp={width:"100%",background:"#0f0f13",border:"1px solid #2a2a38",borderRadius:8,padding:"10px 13px",color:"#e8e3d8",fontSize:14,outline:"none",fontFamily:"inherit",marginBottom:2};
   const btnPrimary={width:"100%",background:"#6366f1",color:"#fff",border:"none",borderRadius:10,padding:"13px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .2s"};
-
-  // MFA screen
-  if(mode==="mfa") return(
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#0f0f13 0%,#1a1a2e 100%)",fontFamily:"'Inter',system-ui,sans-serif"}}>
-      <div style={{width:"min(92vw,420px)",padding:"clamp(24px,5vw,40px) clamp(18px,4vw,36px)",background:"#16161f",borderRadius:20,border:"1px solid #2a2a38",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
-        <div style={{textAlign:"center",marginBottom:28}}>
-          <div style={{fontSize:40,marginBottom:10}}>🔐</div>
-          <div style={{fontSize:22,fontWeight:700,color:"#e8e3d8"}}>Two-Factor Authentication</div>
-          <div style={{fontSize:12,color:"#7a7590",marginTop:5,lineHeight:1.6}}>Enter the 6-digit code from your authenticator app.</div>
-        </div>
-        <div style={{marginBottom:22}}>
-          <div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>Verification Code</div>
-          <input value={mfaCode} onChange={e=>setMfaCode(e.target.value.replace(/\D/g,"").slice(0,6))} type="text" inputMode="numeric" placeholder="000000" maxLength={6} onKeyDown={e=>e.key==="Enter"&&submitMfa()} style={{...inp,fontSize:24,letterSpacing:8,textAlign:"center"}} autoFocus/>
-        </div>
-        {error&&<div style={{fontSize:12,color:"#ef4444",background:"rgba(239,68,68,.1)",padding:"9px 13px",borderRadius:8,marginBottom:14,border:"1px solid rgba(239,68,68,.3)"}}>{error}</div>}
-        <button onClick={submitMfa} disabled={loading||mfaCode.length!==6} style={{...btnPrimary,opacity:loading||mfaCode.length!==6?0.6:1}}>
-          {loading?"Verifying...":"Verify & Sign In →"}
-        </button>
-        <div style={{textAlign:"center",marginTop:14}}>
-          <span onClick={()=>{setMode("login");setMfaCode("");setError("");}} style={{fontSize:12,color:"#7a7590",cursor:"pointer"}}>← Back to Sign In</span>
-        </div>
-      </div>
-    </div>
-  );
 
   // ── Reset password screen ──────────────────────────────────────────────────
   if(mode==="reset") return(
@@ -262,8 +193,8 @@ function AuthScreen({onAuth}){
           <div style={{fontSize:22,fontWeight:700,color:"#e8e3d8"}}>Set New Password</div>
           <div style={{fontSize:12,color:"#7a7590",marginTop:5}}>Choose a strong password for your account</div>
         </div>
-        <div style={{marginBottom:14}}><div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>New Password</div><PwField value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 6 characters" show={showPw} onToggle={()=>setShowPw(v=>!v)}/></div>
-        <div style={{marginBottom:22}}><div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>Confirm New Password</div><PwField value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} placeholder="Repeat your new password" show={showConfirmPw} onToggle={()=>setShowConfirmPw(v=>!v)} onKeyDown={e=>e.key==="Enter"&&submit()}/></div>
+        <div style={{marginBottom:14}}><div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>New Password</div><input value={password} onChange={e=>setPassword(e.target.value)} type="password" placeholder="At least 6 characters" style={inp}/></div>
+        <div style={{marginBottom:22}}><div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>Confirm New Password</div><input value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} type="password" placeholder="Repeat your new password" onKeyDown={e=>e.key==="Enter"&&submit()} style={inp}/></div>
         {/* Password strength indicator */}
         {password.length>0&&(
           <div style={{marginBottom:14}}>
@@ -335,7 +266,7 @@ function AuthScreen({onAuth}){
         <div style={{marginBottom:14}}><div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>Email</div><input value={email} onChange={e=>setEmail(e.target.value)} type="email" placeholder="you@university.edu" style={inp}/></div>
         <div style={{marginBottom:mode==="login"?8:22}}>
           <div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>Password</div>
-          <PwField value={password} onChange={e=>setPassword(e.target.value)} show={showPw} onToggle={()=>setShowPw(v=>!v)} onKeyDown={e=>e.key==="Enter"&&submit()}/>
+          <input value={password} onChange={e=>setPassword(e.target.value)} type="password" placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&submit()} style={inp}/>
         </div>
         {/* Forgot password link — only on login */}
         {mode==="login"&&(
@@ -568,8 +499,6 @@ export default function ProPlanScholar(){
   const[canvasToken,setCanvasToken]=useState(""); // Canvas API token
   const[canvasImporting,setCanvasImporting]=useState(false);
   const[integrationTab,setIntegrationTab]=useState("outlook"); // active integration tab
-  const[pushEnabled,setPushEnabled]=useState(false); // push notification subscription status
-  const[pushLoading,setPushLoading]=useState(false); // push subscription loading state
   const[trackerCategory,setTrackerCategory]=useState(null); // drill-down category
   const[milestones,setMilestones]=useState([]);
   const[scheduleBlocks,setScheduleBlocks]=useState([]);  // practice, greek, work events
@@ -593,6 +522,9 @@ export default function ProPlanScholar(){
   const[showAddBlock,setShowAddBlock]=useState(false);
   const[uploading,setUploading]=useState(false);
   const[uploadMsg,setUploadMsg]=useState("");
+  const[loaderMsgIndex,setLoaderMsgIndex]=useState(0);
+  const[isDragging,setIsDragging]=useState(false);
+  const[showSyllabusViewer,setShowSyllabusViewer]=useState(null); // course object
   const[feedbackText,setFeedbackText]=useState("");
   const[feedbackType,setFeedbackType]=useState("suggestion");
   const[feedbackSent,setFeedbackSent]=useState(false);
@@ -786,66 +718,6 @@ export default function ProPlanScholar(){
   }
 
   function notify(msg){setNotification(msg);setTimeout(()=>setNotification(""),3500);}
-
-  // ── Push notification subscription ───────────────────────────────────────
-  async function subscribeToPush(){
-    setPushLoading(true);
-    try{
-      if(!('Notification' in window)||!('serviceWorker' in navigator)){
-        notify("Push notifications are not supported on this browser.");
-        setPushLoading(false); return;
-      }
-      const permission=await Notification.requestPermission();
-      if(permission!=='granted'){
-        notify("Please allow notifications in your browser settings.");
-        setPushLoading(false); return;
-      }
-      const reg=await navigator.serviceWorker.ready;
-      const sub=await reg.pushManager.subscribe({
-        userVisibleOnly:true,
-        applicationServerKey:'BMqudEIQ_tmY9ltSETTZFuQpZ0YU2VSU8PXP2hXWwvwSUcCPR5d7z-WoLBZuGelOeyCE7R_T91dHZIK2d2LJTog'
-      });
-      await fetch('/api/push/subscribe',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({subscription:sub.toJSON(),userId:authUser.id})
-      });
-      setPushEnabled(true);
-      notify("Push notifications enabled! You'll get deadline reminders automatically.");
-    }catch(err){
-      notify("Could not enable notifications: "+err.message);
-    }
-    setPushLoading(false);
-  }
-
-  async function unsubscribeFromPush(){
-    setPushLoading(true);
-    try{
-      const reg=await navigator.serviceWorker.ready;
-      const sub=await reg.pushManager.getSubscription();
-      if(sub) await sub.unsubscribe();
-      await fetch('/api/push/subscribe',{
-        method:'DELETE',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({userId:authUser.id})
-      });
-      setPushEnabled(false);
-      notify("Push notifications disabled.");
-    }catch(err){
-      notify("Error disabling notifications.");
-    }
-    setPushLoading(false);
-  }
-
-  // Check push subscription status on load
-  async function checkPushStatus(){
-    try{
-      if(!('serviceWorker' in navigator)||!('PushManager' in window)) return;
-      const reg=await navigator.serviceWorker.ready;
-      const sub=await reg.pushManager.getSubscription();
-      setPushEnabled(!!sub);
-    }catch(e){}
-  }
 
   // ── Feature gate helper ───────────────────────────────────────────────────
   function ProGate({feature,children}){
@@ -1241,26 +1113,50 @@ export default function ProPlanScholar(){
   }
 
   // ── Syllabus import ────────────────────────────────────────────────────────
+  // Wrapper used by file <input> change handlers
   async function handleSyllabusUpload(e){
-    const file=e.target.files[0];if(!file)return;
+    const file=e.target.files[0];
+    // Reset the input so the same file can be re-selected later
+    try{e.target.value="";}catch{}
+    if(!file)return;
+    return processSyllabusFile(file);
+  }
+
+  // Core handler — accepts a File object directly (used by both file picker AND drag-and-drop)
+  async function processSyllabusFile(file){
+    if(!file)return;
     setUploading(true);setUploadMsg("Reading file...");
     const isPDF=file.type==="application/pdf"||file.name.toLowerCase().endsWith(".pdf");
+    // Always capture base64 of original file so we can save it for later viewing
+    let originalB64="";
+    try{
+      originalB64=await new Promise((res,rej)=>{
+        const r=new FileReader();
+        r.onload=()=>res((r.result||"").toString().split(",")[1]||"");
+        r.onerror=()=>rej(new Error("Could not read file"));
+        r.readAsDataURL(file);
+      });
+    }catch(readErr){
+      console.warn("Could not read original file as base64:",readErr);
+    }
+    let originalText="";
     try{
       let result;
       if(isPDF){
         setUploadMsg("Converting PDF...");
-        // Read PDF as base64
-        const base64=await new Promise((res,rej)=>{
-          const r=new FileReader();
-          r.onload=()=>res(r.result.split(",")[1]);
-          r.onerror=()=>rej(new Error("Could not read file"));
-          r.readAsDataURL(file);
-        });
+        // Re-use base64 (FileReader was already called above)
+        const base64=originalB64;
         setUploadMsg("Sending PDF to AI...");
-        const resp=await fetch("/api/ai",{
+        // Check key is present before calling
+        const apiKey=import.meta.env.VITE_ANTHROPIC_KEY||"";
+        if(!apiKey){throw new Error("API key not found. Check VITE_ANTHROPIC_KEY in Vercel environment variables.");}
+        const resp=await fetch("https://api.anthropic.com/v1/messages",{
           method:"POST",
           headers:{
             "Content-Type":"application/json",
+            "x-api-key":apiKey,
+            "anthropic-version":"2023-06-01",
+            "anthropic-dangerous-direct-browser-access":"true"
           },
           body:JSON.stringify({
             model:"claude-sonnet-4-20250514",
@@ -1322,6 +1218,7 @@ Return ONLY the JSON object, nothing else.`}
         // Plain text file
         setUploadMsg("Reading text...");
         const text=await file.text();
+        originalText=text;
         setUploadMsg("Analyzing with AI...");
         result=await callClaudeJSON(
           `Parse this academic syllabus. Return ONLY valid JSON: {"courseName":"","professorName":"","difficulty":1-5,"classDays":["Mon","Wed"],"classTime":"18:00","classEndTime":"20:00","assignments":[{"title":"","due":"YYYY-MM-DD","type":"paper|exam|case|homework|project|discussion","estHours":2,"topics":"key topics or description"}]}. For estHours use BASE completion time only: discussion=1-2h, homework=1-3h, case=2-4h, project=4-10h, paper=3-8h, exam=2-4h, doctoral dissertation=8-20h. For difficulty: 1=very easy, 3=average, 5=very hard (doctoral courses typically 4-5). classDays uses Mon/Tue/Wed/Thu/Fri/Sat/Sun. classTime 24hr format. Assume year ${new Date().getFullYear()}.`,
@@ -1346,6 +1243,28 @@ Return ONLY the JSON object, nothing else.`}
         }).select().single();
         if(ce)throw new Error(`Course save error: ${ce.message}`);
         if(cd){setCourses(p=>[...p,{...cd,rmpData:null}]);cid=cd.id;}
+      }
+      // Save the original syllabus file + parsed text on the course (best-effort —
+      // requires the optional "syllabus_data" jsonb column. If the column is missing
+      // we silently skip so the rest of the import still succeeds.)
+      const syllabusBlob={
+        filename:file.name,
+        filetype:file.type||(isPDF?"application/pdf":"text/plain"),
+        size:file.size,
+        fileBase64:originalB64||"",
+        parsedText:originalText||"",
+        uploadedAt:new Date().toISOString(),
+      };
+      try{
+        setUploadMsg("Saving syllabus...");
+        const{error:syllErr}=await supabase.from("courses").update({syllabus_data:syllabusBlob}).eq("id",cid);
+        if(syllErr){
+          console.warn("Could not save syllabus to DB (column may not exist yet):",syllErr.message);
+        }else{
+          setCourses(p=>p.map(x=>x.id===cid?{...x,syllabus_data:syllabusBlob}:x));
+        }
+      }catch(syllSaveErr){
+        console.warn("Syllabus save failed (non-fatal):",syllSaveErr);
       }
       // Save assignments
       setUploadMsg("Saving assignments...");
@@ -1374,6 +1293,71 @@ Return ONLY the JSON object, nothing else.`}
     }
     setUploading(false);
   }
+
+  // Drag-and-drop entry point — accepts the dropped file and runs the same flow
+  function handleSyllabusDrop(e){
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const file=e.dataTransfer?.files?.[0];
+    if(!file){notify("No file detected — please try again.");return;}
+    const okExt=/\.(pdf|txt|docx)$/i.test(file.name);
+    if(!okExt){notify("Please drop a .pdf, .txt, or .docx file.");return;}
+    processSyllabusFile(file);
+  }
+  function handleSyllabusDragOver(e){
+    e.preventDefault();
+    e.stopPropagation();
+    if(e.dataTransfer)e.dataTransfer.dropEffect="copy";
+    setIsDragging(true);
+  }
+  function handleSyllabusDragLeave(e){
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }
+
+  // Remove the saved syllabus from a course (keeps the course + assignments intact)
+  async function deleteSavedSyllabus(courseId){
+    if(!confirm("Remove the saved syllabus from this course? Your assignments will not be affected."))return;
+    try{
+      const{error}=await supabase.from("courses").update({syllabus_data:null}).eq("id",courseId);
+      if(error)throw error;
+      setCourses(p=>p.map(x=>x.id===courseId?{...x,syllabus_data:null}:x));
+      setShowSyllabusViewer(null);
+      notify("Syllabus removed.");
+    }catch(err){
+      console.error(err);
+      notify(`Could not remove syllabus: ${err.message||err}`);
+    }
+  }
+
+  // Trigger a download of the saved original file (PDF/DOCX/TXT)
+  function downloadSavedSyllabus(course){
+    const s=course?.syllabus_data;
+    if(!s||!s.fileBase64){notify("Original file not available for this syllabus.");return;}
+    try{
+      const byteChars=atob(s.fileBase64);
+      const bytes=new Uint8Array(byteChars.length);
+      for(let i=0;i<byteChars.length;i++)bytes[i]=byteChars.charCodeAt(i);
+      const blob=new Blob([bytes],{type:s.filetype||"application/octet-stream"});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement("a");
+      a.href=url;a.download=s.filename||"syllabus";
+      document.body.appendChild(a);a.click();
+      setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},100);
+    }catch(err){
+      console.error("Download error:",err);
+      notify("Could not download file.");
+    }
+  }
+
+  // Rotate loader status messages while AI is working
+  useEffect(()=>{
+    if(!uploading){setLoaderMsgIndex(0);return;}
+    const id=setInterval(()=>setLoaderMsgIndex(i=>i+1),2200);
+    return()=>clearInterval(id);
+  },[uploading]);
 
   // ── RMP ───────────────────────────────────────────────────────────────────
   async function handleRmpSearch(cid,profName){
@@ -1755,6 +1739,64 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
   @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.5;}}
   @keyframes energyPop{0%{transform:scale(1);}40%{transform:scale(1.3);}100%{transform:scale(1);}}
   @keyframes fadeSlideIn{from{opacity:0;transform:translateX(-6px);}to{opacity:1;transform:translateX(0);}}
+  /* Syllabus loader — books with flipping pages */
+  @keyframes syl-flip{
+    0%{transform:rotateY(0deg);}
+    45%{transform:rotateY(-170deg);}
+    50%{transform:rotateY(-180deg);}
+    95%{transform:rotateY(-360deg);}
+    100%{transform:rotateY(-360deg);}
+  }
+  @keyframes syl-bob{
+    0%,100%{transform:translateY(0);}
+    50%{transform:translateY(-3px);}
+  }
+  .syl-page{
+    transform-origin:0 50%;
+    animation:syl-flip 2.4s ease-in-out infinite;
+    transform-style:preserve-3d;
+  }
+  .syl-books{animation:syl-bob 2.4s ease-in-out infinite;}
+  .syl-overlay{
+    position:fixed;inset:0;z-index:120;
+    background:rgba(0,0,0,.55);
+    display:flex;align-items:center;justify-content:center;
+    animation:fadeIn .25s ease;
+    padding:20px;
+  }
+  .syl-modal{
+    background:${T.card};
+    border:1px solid ${T.border};
+    border-radius:18px;
+    padding:28px 26px 24px;
+    max-width:360px;width:100%;
+    text-align:center;
+    box-shadow:0 20px 60px rgba(0,0,0,.4);
+  }
+  /* Drag-and-drop syllabus dropzone */
+  .syl-drop{
+    border:2px dashed ${T.border2};
+    border-radius:12px;
+    padding:18px 14px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .2s,background .2s,transform .15s;
+    display:block;
+  }
+  .syl-drop:hover{border-color:${T.accent};background:rgba(${rgb},.04);}
+  .syl-drop.is-dragging{border-color:${T.accent};background:rgba(${rgb},.10);transform:scale(1.01);}
+  .syl-drop-mini{
+    border:1px dashed ${T.border2};
+    border-radius:9px;
+    padding:7px 11px;
+    cursor:pointer;
+    transition:border-color .2s,background .2s;
+    display:inline-flex;align-items:center;gap:6px;
+    font-size:13px;color:${T.text};
+    background:${T.hoverBg};
+  }
+  .syl-drop-mini:hover{border-color:${T.accent};}
+  .syl-drop-mini.is-dragging{border-color:${T.accent};background:rgba(${rgb},.12);}
   .energy-pop{animation:energyPop .3s ease;}
 
   /* ── Layout primitives ────────────────────────────────── */
@@ -2074,6 +2116,110 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
       {/* ── Toast ─────────────────────────────────────────── */}
       {notification&&<div style={{position:"fixed",top:"max(16px,env(safe-area-inset-top))",left:"50%",transform:"translateX(-50%)",background:T.success,color:"#fff",padding:"10px 20px",borderRadius:100,zIndex:999,fontSize:13,fontWeight:600,boxShadow:`0 4px 20px rgba(${hexToRgb(T.success)},.35)`,animation:"fi .3s ease",whiteSpace:"nowrap",maxWidth:"calc(100vw - 32px)",textAlign:"center"}}>{notification}</div>}
 
+      {/* ── Syllabus AI loader (books with flipping pages) ── */}
+      {uploading&&(()=>{
+        const rotating=[
+          "Reading your syllabus…",
+          "Pulling out assignments…",
+          "Checking due dates…",
+          "Estimating study hours…",
+          "Almost done…",
+        ];
+        const msg=rotating[loaderMsgIndex%rotating.length];
+        return(
+          <div className="syl-overlay" role="dialog" aria-live="polite" aria-label="Analyzing syllabus">
+            <div className="syl-modal">
+              <div style={{display:"flex",justifyContent:"center",marginBottom:14}}>
+                <svg viewBox="0 0 200 180" width="170" height="153" aria-hidden="true">
+                  <g className="syl-books">
+                    {/* Bottom book — coral */}
+                    <rect x="30" y="120" width="140" height="14" rx="2" fill="#ec4899" stroke="#9d2660" strokeWidth="1.5"/>
+                    <rect x="38" y="123" width="14" height="8" rx="1" fill="#fef3c7"/>
+                    {/* Middle book — accent (theme color) */}
+                    <rect x="40" y="106" width="120" height="14" rx="2" fill={T.accent} stroke="#1e1b4b" strokeWidth="1.5"/>
+                    {/* Top book — sky */}
+                    <rect x="50" y="92" width="100" height="14" rx="2" fill="#0ea5e9" stroke="#075985" strokeWidth="1.5"/>
+                    {/* Open book on top */}
+                    <g transform="translate(100 80)">
+                      {/* Left page (static) */}
+                      <path d="M0 -50 Q-25 -55 -50 -50 L-50 30 Q-25 25 0 30 Z" fill="#faf1dc" stroke="#7a4f2e" strokeWidth="1.5"/>
+                      {/* Right page (static) */}
+                      <path d="M0 -50 Q25 -55 50 -50 L50 30 Q25 25 0 30 Z" fill="#faf1dc" stroke="#7a4f2e" strokeWidth="1.5"/>
+                      {/* Lines on left */}
+                      <line x1="-40" y1="-38" x2="-10" y2="-38" stroke="#a88b6a" strokeWidth="1"/>
+                      <line x1="-40" y1="-30" x2="-10" y2="-30" stroke="#a88b6a" strokeWidth="1"/>
+                      <line x1="-40" y1="-22" x2="-15" y2="-22" stroke="#a88b6a" strokeWidth="1"/>
+                      <line x1="-40" y1="-14" x2="-12" y2="-14" stroke="#a88b6a" strokeWidth="1"/>
+                      {/* Lines on right */}
+                      <line x1="10" y1="-38" x2="40" y2="-38" stroke="#a88b6a" strokeWidth="1"/>
+                      <line x1="10" y1="-30" x2="40" y2="-30" stroke="#a88b6a" strokeWidth="1"/>
+                      <line x1="10" y1="-22" x2="35" y2="-22" stroke="#a88b6a" strokeWidth="1"/>
+                      <line x1="10" y1="-14" x2="38" y2="-14" stroke="#a88b6a" strokeWidth="1"/>
+                      {/* Spine */}
+                      <line x1="0" y1="-50" x2="0" y2="30" stroke="#7a4f2e" strokeWidth="1.5"/>
+                      {/* Flipping page */}
+                      <g className="syl-page">
+                        <path d="M0 -50 Q-25 -55 -50 -50 L-50 30 Q-25 25 0 30 Z" fill="#fff8e7" stroke="#7a4f2e" strokeWidth="1.5"/>
+                        <line x1="-40" y1="-38" x2="-10" y2="-38" stroke="#a88b6a" strokeWidth="1"/>
+                        <line x1="-40" y1="-30" x2="-10" y2="-30" stroke="#a88b6a" strokeWidth="1"/>
+                        <line x1="-40" y1="-22" x2="-15" y2="-22" stroke="#a88b6a" strokeWidth="1"/>
+                      </g>
+                    </g>
+                  </g>
+                </svg>
+              </div>
+              <div style={{fontWeight:700,fontSize:15,marginBottom:6,color:T.text}}>Analyzing your syllabus</div>
+              <div style={{fontSize:13,color:T.muted,marginBottom:10,minHeight:18,transition:"opacity .25s"}} key={msg}>{msg}</div>
+              <div style={{fontSize:11,color:T.faint,lineHeight:1.5}}>This usually takes 10–30 seconds. Please don't close the window.</div>
+              {uploadMsg&&<div style={{fontSize:10,color:T.faint,marginTop:10,fontStyle:"italic"}}>{uploadMsg}</div>}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Syllabus viewer modal ─────────────────────────── */}
+      {showSyllabusViewer&&(()=>{
+        const c=showSyllabusViewer;
+        const s=c.syllabus_data;
+        if(!s)return null;
+        const dt=s.uploadedAt?new Date(s.uploadedAt).toLocaleString():"";
+        return(
+          <div className="syl-overlay" role="dialog" aria-label="Saved syllabus" onClick={()=>setShowSyllabusViewer(null)}>
+            <div className="syl-modal" style={{maxWidth:520,textAlign:"left",padding:"22px 22px 18px"}} onClick={e=>e.stopPropagation()}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10,gap:10}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:10,letterSpacing:2,color:T.accent,textTransform:"uppercase",fontWeight:700}}>Saved Syllabus</div>
+                  <div style={{fontWeight:700,fontSize:16,marginTop:3,color:T.text,wordBreak:"break-word"}}>{c.name}</div>
+                </div>
+                <button onClick={()=>setShowSyllabusViewer(null)} style={{background:"transparent",border:`1px solid ${T.border2}`,borderRadius:7,width:28,height:28,color:T.muted,fontSize:13,cursor:"pointer",flexShrink:0}}>✕</button>
+              </div>
+              <div style={{padding:"10px 12px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`,marginBottom:12,fontSize:12,color:T.muted}}>
+                <div><strong style={{color:T.text}}>{s.filename||"syllabus"}</strong></div>
+                <div style={{marginTop:3}}>Uploaded {dt}{s.size?` · ${Math.round(s.size/1024)} KB`:""}</div>
+              </div>
+              {s.parsedText&&(
+                <div style={{marginBottom:12}}>
+                  <div style={{fontSize:11,color:T.muted,marginBottom:5,fontWeight:600,textTransform:"uppercase",letterSpacing:1}}>Extracted text</div>
+                  <div style={{maxHeight:240,overflowY:"auto",padding:"10px 12px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`,fontSize:12,color:T.text,whiteSpace:"pre-wrap",lineHeight:1.5}}>
+                    {s.parsedText.slice(0,4000)}{s.parsedText.length>4000?"\n\n…(truncated)":""}
+                  </div>
+                </div>
+              )}
+              {!s.parsedText&&s.fileBase64&&(
+                <div style={{marginBottom:12,padding:"10px 12px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`,fontSize:12,color:T.muted}}>
+                  Original file is saved. Click <strong>Download</strong> to open it.
+                </div>
+              )}
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                {s.fileBase64&&<button className="bp" style={{flex:1,fontSize:13,padding:"10px 14px"}} onClick={()=>downloadSavedSyllabus(c)}>⬇ Download</button>}
+                <button className="bg2" style={{flex:1,fontSize:13,padding:"10px 14px"}} onClick={()=>{setShowSyllabusViewer(null);}}>Close</button>
+                <button className="del-btn" style={{padding:"10px 14px",fontSize:13}} onClick={()=>deleteSavedSyllabus(c.id)}>🗑 Remove</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Focus Timer Overlay ────────────────────────────── */}
       {focusTimer&&(
         <div style={{position:"fixed",bottom:isMobile?80:24,right:24,background:T.card,border:`2px solid ${focusTimer.courseColor}`,borderRadius:16,padding:"16px 20px",boxShadow:"0 8px 32px rgba(0,0,0,.3)",zIndex:9998,minWidth:240,animation:"slideUp .3s ease"}}>
@@ -2365,12 +2511,22 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                   ))}
                 </div>
               </div>
-              <div style={{marginTop:12,padding:12,background:T.subcard,border:`1px dashed ${T.border2}`,borderRadius:10,display:"flex",alignItems:"center",gap:11}}>
+              <label
+                className={"syl-drop"+(isDragging?" is-dragging":"")}
+                style={{marginTop:12,display:"flex",alignItems:"center",gap:11,textAlign:"left",padding:12}}
+                onDragOver={handleSyllabusDragOver}
+                onDragEnter={handleSyllabusDragOver}
+                onDragLeave={handleSyllabusDragLeave}
+                onDrop={handleSyllabusDrop}>
+                <input type="file" accept=".txt,.pdf,.docx" onChange={handleSyllabusUpload} style={{display:"none"}}/>
                 <div style={{fontSize:20}}>📄</div>
-                <div style={{flex:1}}><div style={{fontWeight:600,fontSize:13}}>Import Syllabus</div><div style={{fontSize:11,color:T.muted}}>Upload .txt or PDF — AI extracts all assignments automatically</div></div>
-                <label style={{cursor:"pointer"}}><input type="file" accept=".txt,.pdf,.docx" onChange={handleSyllabusUpload} style={{display:"none"}}/><span className="bp" style={{fontSize:12,padding:"6px 13px",display:"inline-block"}}>{uploading?"Analyzing...":"Upload"}</span></label>
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:600,fontSize:13}}>Import Syllabus</div>
+                  <div style={{fontSize:11,color:T.muted}}>{isDragging?"Drop your syllabus to upload":"Drop or click — AI extracts all assignments automatically"}</div>
+                </div>
+                <span className="bp" style={{fontSize:12,padding:"6px 13px",display:"inline-block"}}>{uploading?"Analyzing…":"Upload"}</span>
                 {uploadMsg&&<div style={{fontSize:11,color:T.success}}>{uploadMsg}</div>}
-              </div>
+              </label>
             </div>
           )}
 
@@ -2461,8 +2617,17 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
             <div className="fi">
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:13}}>
                 <div><div style={{fontSize:10,letterSpacing:3,color:T.accent,textTransform:"uppercase"}}>Assignments</div><h1 style={{fontSize:22,fontWeight:700}}>All Assignments</h1></div>
-                <div style={{display:"flex",gap:7}}>
-                  <label style={{cursor:"pointer"}}><input type="file" accept=".txt,.pdf,.docx" onChange={handleSyllabusUpload} style={{display:"none"}}/><span className="bg2" style={{display:"inline-block"}}>📄 Upload Syllabus</span></label>
+                <div style={{display:"flex",gap:7,alignItems:"center"}}>
+                  <label
+                    className={"syl-drop-mini"+(isDragging?" is-dragging":"")}
+                    onDragOver={handleSyllabusDragOver}
+                    onDragEnter={handleSyllabusDragOver}
+                    onDragLeave={handleSyllabusDragLeave}
+                    onDrop={handleSyllabusDrop}
+                    title="Click or drag a syllabus file here">
+                    <input type="file" accept=".txt,.pdf,.docx" onChange={handleSyllabusUpload} style={{display:"none"}}/>
+                    <span style={{whiteSpace:"nowrap"}}>{uploading?"Analyzing…":isDragging?"⬇ Drop here":"📄 Upload or drop"}</span>
+                  </label>
                   <button className="bp" onClick={()=>setShowAddAssign(true)}>+ Add</button>
                 </div>
               </div>
@@ -2541,10 +2706,16 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
             <div className="fi">
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:13,flexWrap:"wrap",gap:8}}>
                 <div><div style={{fontSize:10,letterSpacing:3,color:T.accent,textTransform:"uppercase"}}>Enrolled</div><h1 style={{fontSize:22,fontWeight:700}}>Courses</h1></div>
-                <div style={{display:"flex",gap:8,flexShrink:0}}>
-                  <label style={{cursor:"pointer"}}>
+                <div style={{display:"flex",gap:8,flexShrink:0,alignItems:"center"}}>
+                  <label
+                    className={"syl-drop-mini"+(isDragging?" is-dragging":"")}
+                    onDragOver={handleSyllabusDragOver}
+                    onDragEnter={handleSyllabusDragOver}
+                    onDragLeave={handleSyllabusDragLeave}
+                    onDrop={handleSyllabusDrop}
+                    title="Click to choose, or drag a syllabus file here">
                     <input type="file" accept=".txt,.pdf,.docx" onChange={handleSyllabusUpload} style={{display:"none"}}/>
-                    <span className="bg2" style={{display:"inline-block",fontSize:13,padding:"8px 14px",borderRadius:9,whiteSpace:"nowrap"}}>{uploading?"Analyzing...":"📄 Upload Syllabus"}</span>
+                    <span style={{whiteSpace:"nowrap"}}>{uploading?"Analyzing…":isDragging?"⬇ Drop to upload":"📄 Upload or drop syllabus"}</span>
                   </label>
                   <button className="bp" onClick={()=>setShowAddCourse(true)}>+ Add Course</button>
                 </div>
@@ -2695,6 +2866,16 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                         </a>
                       </div>);
                     })()}
+                    {c.syllabus_data&&(
+                      <button
+                        onClick={()=>setShowSyllabusViewer(c)}
+                        title={`Saved syllabus: ${c.syllabus_data.filename||"file"}`}
+                        style={{display:"flex",alignItems:"center",gap:6,width:"100%",padding:"6px 9px",marginBottom:7,background:`rgba(${hexToRgb(c.color)},.10)`,border:`1px solid rgba(${hexToRgb(c.color)},.35)`,borderRadius:8,fontSize:11,color:c.color,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
+                        <span>📄</span>
+                        <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>View saved syllabus</span>
+                        <span style={{fontSize:10,color:T.muted,fontWeight:400}}>open</span>
+                      </button>
+                    )}
                     <div className="prog-bar" style={{marginBottom:5}}><div className="prog-fill" style={{width:`${pct}%`,background:c.color}}/></div>
                     <div style={{fontSize:10,color:T.muted,marginBottom:next?7:0}}>{done}/{total} complete · {"★".repeat(c.difficulty)}{"☆".repeat(5-c.difficulty)}</div>
                     {next&&(()=>{const d=daysUntil(next.due);return(<div onClick={()=>setEditAssign({...next})} style={{fontSize:11,padding:"5px 8px",background:T.subcard,borderRadius:6,cursor:"pointer",transition:"background .2s"}}>Next: <span style={{color:c.color,fontWeight:600,textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:2}}>{next.title}</span> · {d<0?<span style={{color:T.danger}}>{Math.abs(d)}d overdue</span>:`${d}d`}</div>);})()}
@@ -3369,8 +3550,8 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
 
                   {/* Tab selector */}
                   <div style={{display:"flex",gap:4,marginBottom:14,flexWrap:"wrap"}}>
-                    {[["outlook","📅 Outlook"],["sms","📱 SMS"],["push","🔔 Push"],["canvas","📚 Canvas"],["email","📧 Email"]].map(([id,label])=>(
-                      <button key={id} onClick={()=>{setIntegrationTab(id);if(id==="push")checkPushStatus();}} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${integrationTab===id?T.accent:T.border2}`,background:integrationTab===id?`rgba(${rgb},.1)`:"transparent",color:integrationTab===id?T.accent:T.muted,fontSize:11,fontWeight:integrationTab===id?700:400,fontFamily:"inherit",cursor:"pointer"}}>{label}</button>
+                    {[["outlook","📅 Outlook"],["sms","📱 SMS"],["canvas","📚 Canvas"],["email","📧 Email"]].map(([id,label])=>(
+                      <button key={id} onClick={()=>setIntegrationTab(id)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${integrationTab===id?T.accent:T.border2}`,background:integrationTab===id?`rgba(${rgb},.1)`:"transparent",color:integrationTab===id?T.accent:T.muted,fontSize:11,fontWeight:integrationTab===id?700:400,fontFamily:"inherit",cursor:"pointer"}}>{label}</button>
                     ))}
                   </div>
 
@@ -3431,38 +3612,6 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                       </div>
                       <div style={{marginTop:10,padding:"8px 12px",background:`rgba(${rgb},.06)`,borderRadius:8,border:`1px solid rgba(${rgb},.15)`}}>
                         <div style={{fontSize:11,color:T.muted}}>💡 To stop receiving texts, clear your phone number and tap Save.</div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* PUSH NOTIFICATIONS */}
-                  {integrationTab==="push"&&(
-                    <div>
-                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-                        <span style={{fontSize:20}}>🔔</span>
-                        <div style={{flex:1}}>
-                          <div style={{fontWeight:600,fontSize:13}}>Push Notifications</div>
-                          <div style={{fontSize:11,color:T.success,fontWeight:600}}>✓ Available now</div>
-                        </div>
-                        {pushEnabled&&<span style={{fontSize:10,background:"rgba(22,163,74,.15)",color:T.success,padding:"2px 8px",borderRadius:8,fontWeight:700}}>ON</span>}
-                      </div>
-                      <div style={{fontSize:12,color:T.muted,lineHeight:1.7,marginBottom:12}}>Get instant deadline reminders directly on your device — no phone number needed. Works on any browser or installed PWA.</div>
-                      <button className="bp" style={{width:"100%",fontSize:13,marginBottom:12,background:pushEnabled?T.danger:T.accent,opacity:pushLoading?0.6:1}}
-                        onClick={pushEnabled?unsubscribeFromPush:subscribeToPush}
-                        disabled={pushLoading}>
-                        {pushLoading?"Working...":(pushEnabled?"🔕 Disable Notifications":"🔔 Enable Push Notifications")}
-                      </button>
-                      <div style={{padding:"10px 12px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`,marginBottom:10}}>
-                        <div style={{fontSize:11,fontWeight:600,marginBottom:6}}>You'll receive notifications:</div>
-                        {[["3 days before","📚 Heads up — assignment coming up"],["1 day before","⚠️ Due tomorrow alert"],["Day of","🚨 Due today — don't forget to submit"]].map(([t,d])=>(
-                          <div key={t} style={{display:"flex",gap:8,padding:"5px 0",borderBottom:`1px solid ${T.border}`,alignItems:"center"}}>
-                            <span style={{fontSize:10,fontWeight:700,color:T.accent,minWidth:90,flexShrink:0}}>{t}</span>
-                            <span style={{fontSize:11,color:T.muted}}>{d}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <div style={{padding:"8px 12px",background:`rgba(${rgb},.06)`,borderRadius:8,border:`1px solid rgba(${rgb},.15)`}}>
-                        <div style={{fontSize:11,color:T.muted}}>💡 <strong style={{color:T.text}}>iOS users:</strong> Install ProPlan Scholar to your home screen via Safari → Share → Add to Home Screen, then enable notifications for best experience. Requires iOS 16.4+.</div>
                       </div>
                     </div>
                   )}
@@ -3583,14 +3732,18 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
 
                 <div className="card">
                   <div style={{fontWeight:700,marginBottom:7}}>Syllabus Import</div>
-                  <div style={{fontSize:12,color:T.muted,marginBottom:10}}>AI extracts all assignments, due dates, professor names, and topics automatically.</div>
-                  <label style={{cursor:"pointer",display:"block"}}>
+                  <div style={{fontSize:12,color:T.muted,marginBottom:10}}>AI extracts all assignments, due dates, professor names, and topics automatically. Saved syllabi can be re-opened from each course card.</div>
+                  <label
+                    className={"syl-drop"+(isDragging?" is-dragging":"")}
+                    onDragOver={handleSyllabusDragOver}
+                    onDragEnter={handleSyllabusDragOver}
+                    onDragLeave={handleSyllabusDragLeave}
+                    onDrop={handleSyllabusDrop}>
                     <input type="file" accept=".txt,.pdf,.docx" onChange={handleSyllabusUpload} style={{display:"none"}}/>
-                    <div style={{border:`2px dashed ${T.border2}`,borderRadius:9,padding:18,textAlign:"center",transition:"border-color .2s"}}>
-                      <div style={{fontSize:22,marginBottom:5}}>📄</div>
-                      <div style={{fontSize:12,color:T.muted}}>{uploading?"Analyzing...":"Click to upload syllabus"}</div>
-                      {uploadMsg&&<div style={{fontSize:11,marginTop:5,color:T.success}}>{uploadMsg}</div>}
-                    </div>
+                    <div style={{fontSize:22,marginBottom:5}}>📄</div>
+                    <div style={{fontSize:13,color:T.text,fontWeight:600}}>{uploading?"Analyzing…":isDragging?"Drop your syllabus to upload":"Drag & drop your syllabus here"}</div>
+                    <div style={{fontSize:11,color:T.muted,marginTop:3}}>or click to browse · PDF, .txt, .docx</div>
+                    {uploadMsg&&<div style={{fontSize:11,marginTop:7,color:T.success}}>{uploadMsg}</div>}
                   </label>
                 </div>
               </div>
@@ -3640,16 +3793,14 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
             </select>
           </div>
           <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Title</div><input className="ifield" placeholder="Assignment title" value={newAssign.title} onChange={e=>setNewAssign(a=>({...a,title:e.target.value}))}/></div>
-          <div>
-            <div style={{fontSize:11,color:T.muted,marginBottom:3}}>Due Date</div>
-            <input type="date" className="ifield" value={newAssign.due} onChange={e=>setNewAssign(a=>({...a,due:e.target.value}))} style={{fontSize:16}}/>
-          </div>
-          <div>
-            <div style={{fontSize:11,color:T.muted,marginBottom:3}}>Type</div>
-            <select className="ifield" value={newAssign.type} onChange={e=>setNewAssign(a=>({...a,type:e.target.value}))}>
-              <option value="" disabled hidden>Select type...</option>
-              {["Paper","Exam","Case Study","Homework","Project","Discussion","Presentation","Lab","Quiz"].map(tp=><option key={tp} value={tp.toLowerCase().replace(" ","")}>{tp}</option>)}
-            </select>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
+            <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Due Date</div><input type="date" className="ifield" value={newAssign.due} onChange={e=>setNewAssign(a=>({...a,due:e.target.value}))}/></div>
+            <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Type</div>
+              <select className="ifield" value={newAssign.type} onChange={e=>setNewAssign(a=>({...a,type:e.target.value}))}>
+                <option value="" disabled hidden>Select type...</option>
+                {["Paper","Exam","Case Study","Homework","Project","Discussion","Presentation","Lab","Quiz"].map(tp=><option key={tp} value={tp.toLowerCase().replace(" ","")}>{tp}</option>)}
+              </select>
+            </div>
           </div>
           <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Estimated Hours: {newAssign.estHours}</div><input type="range" min={1} max={30} value={newAssign.estHours} onChange={e=>setNewAssign(a=>({...a,estHours:+e.target.value}))} style={{width:"100%",accentColor:T.accent}}/></div>
           <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Description / Notes <span style={{color:T.faint}}>(optional)</span></div><textarea className="ifield" rows={2} placeholder="Key topics, requirements, what to focus on..." value={newAssign.topics||""} onChange={e=>setNewAssign(a=>({...a,topics:e.target.value}))} style={{resize:"vertical",fontSize:12}}/></div>
@@ -3755,33 +3906,19 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
             </select>
           </div>
           <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Title</div><input className="ifield" value={editAssign.title} onChange={e=>setEditAssign(a=>({...a,title:e.target.value}))}/></div>
-          <div>
-            <div style={{fontSize:11,color:T.muted,marginBottom:3}}>Due Date</div>
-            <input type="date" className="ifield" value={editAssign.due} onChange={e=>setEditAssign(a=>({...a,due:e.target.value}))} style={{fontSize:16}}/>
-          </div>
-          <div>
-            <div style={{fontSize:11,color:T.muted,marginBottom:3}}>Type</div>
-            <select className="ifield" value={editAssign.type} onChange={e=>setEditAssign(a=>({...a,type:e.target.value}))}>
-              <option value="" disabled hidden>Select type...</option>
-              {["Paper","Exam","Case Study","Homework","Project","Discussion","Presentation","Lab","Quiz"].map(tp=><option key={tp} value={tp.toLowerCase().replace(" ","")}>{tp}</option>)}
-            </select>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
+            <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Due Date</div><input type="date" className="ifield" value={editAssign.due} onChange={e=>setEditAssign(a=>({...a,due:e.target.value}))}/></div>
+            <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Type</div>
+              <select className="ifield" value={editAssign.type} onChange={e=>setEditAssign(a=>({...a,type:e.target.value}))}>
+                <option value="" disabled hidden>Select type...</option>
+                {["Paper","Exam","Case Study","Homework","Project","Discussion","Presentation","Lab","Quiz"].map(tp=><option key={tp} value={tp.toLowerCase().replace(" ","")}>{tp}</option>)}
+              </select>
+            </div>
           </div>
           <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Estimated Hours: {editAssign.estHours}</div><input type="range" min={1} max={30} value={editAssign.estHours} onChange={e=>setEditAssign(a=>({...a,estHours:+e.target.value}))} style={{width:"100%",accentColor:T.accent}}/></div>
-          <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Description / Notes <span style={{color:T.faint}}>(optional)</span></div><textarea className="ifield" rows={2} value={editAssign.topics||""} onChange={e=>setEditAssign(a=>({...a,topics:e.target.value}))} style={{resize:"vertical",fontSize:12}} placeholder="Key topics, requirements, what to focus on..."/></div>
+          <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Notes / Topics</div><textarea className="ifield" rows={2} value={editAssign.topics||""} onChange={e=>setEditAssign(a=>({...a,topics:e.target.value}))} style={{resize:"vertical",fontSize:12}} placeholder="Key topics, notes for flashcards..."/></div>
           <div style={{display:"flex",gap:8,marginTop:4}}><button className="bg2" style={{flex:1}} onClick={()=>setEditAssign(null)}>Cancel</button><button className="bp" style={{flex:1}} onClick={saveEditAssignment}>Save Changes</button></div>
         </div>
-      </div></div>)}
-
-      {/* ═══ GRADE ENTRY MODAL ═══ */}
-      {showGradeModal&&(<div className="mo" onClick={()=>setShowGradeModal(null)}><div className="md fi" onClick={e=>e.stopPropagation()} style={{maxWidth:360}}>
-        <div style={{fontWeight:700,fontSize:16,marginBottom:13}}>Log Grade</div>
-        <div style={{fontSize:12,color:T.muted,marginBottom:10}}>{showGradeModal.title} · {courses.find(c=>c.id===showGradeModal.courseId)?.name}</div>
-        <div style={{display:"flex",gap:10,marginBottom:12}}>
-          <div style={{flex:1}}><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Your Score</div><input type="number" className="ifield" value={gradeInput.score} onChange={e=>setGradeInput(p=>({...p,score:e.target.value}))} min={0} style={{fontSize:14}}/></div>
-          <div style={{flex:1}}><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Out Of</div><input type="number" className="ifield" value={gradeInput.maxScore} onChange={e=>setGradeInput(p=>({...p,maxScore:e.target.value}))} min={1} style={{fontSize:14}}/></div>
-        </div>
-        {gradeInput.score!==""&&+gradeInput.maxScore>0&&(()=>{const pct=Math.round((+gradeInput.score/+gradeInput.maxScore)*100);return <div style={{fontSize:12,color:pct>=70?T.success:pct>=60?T.warning:T.danger,marginBottom:8,fontWeight:600}}>{pct}%</div>;})()}
-        <div style={{display:"flex",gap:8}}><button className="bg2" style={{flex:1}} onClick={()=>setShowGradeModal(null)}>Cancel</button><button className="bp" style={{flex:1}} onClick={()=>{const s=+gradeInput.score;const m=+gradeInput.maxScore;if(!s&&s!==0){notify("Enter your score");return;}saveGrade(showGradeModal.id,showGradeModal.courseId,s,m||100);}}>Save Grade</button></div>
       </div></div>)}
 
       {/* ═══ BOTTOM TAB BAR (mobile only) ═══ */}
@@ -3796,8 +3933,8 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
             </button>
           );
         })}
-        <button className={`tab-item${view==="settings"||view==="major-project"||view==="flashcards"||view==="analytics"?" active":""}`} onClick={()=>setView(view==="settings"||view==="major-project"||view==="flashcards"||view==="analytics"?"dashboard":"settings")}>
-          <span className="tab-item-icon">{view==="settings"||view==="major-project"||view==="flashcards"||view==="analytics"?"✕":"⋯"}</span>
+        <button className={`tab-item${view==="settings"||view==="dissertation"||view==="flashcards"||view==="analytics"?" active":""}`} onClick={()=>setView(view==="settings"||view==="dissertation"||view==="flashcards"||view==="analytics"?"dashboard":"settings")}>
+          <span className="tab-item-icon">{view==="settings"||view==="dissertation"||view==="flashcards"||view==="analytics"?"✕":"⋯"}</span>
           <span>More</span>
         </button>
       </nav>
