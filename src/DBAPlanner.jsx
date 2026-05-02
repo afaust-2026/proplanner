@@ -1203,8 +1203,11 @@ export default function ProPlanScholar(){
 Return ONLY a valid JSON object — no explanation, no markdown, no backticks. Just raw JSON:
 {
   "courseName": "full course name and number",
-  "professorName": "professor full name or empty string",
+  "professorName": "professor full name or empty string (look in the header, instructor section, contact info, etc.)",
   "difficulty": 3,
+  "classDays": ["Mon","Wed"],
+  "classTime": "18:00",
+  "classEndTime": "20:00",
   "assignments": [
     {
       "title": "assignment name",
@@ -1216,6 +1219,8 @@ Return ONLY a valid JSON object — no explanation, no markdown, no backticks. J
   ]
 }
 
+For classDays use the days the class actually meets, from this list: Sun, Mon, Tue, Wed, Thu, Fri, Sat. If the syllabus says "MWF" use ["Mon","Wed","Fri"]; "TR" or "T/Th" means ["Tue","Thu"]. Leave classDays as an empty array [] if it's an asynchronous online course or the meeting schedule is not stated.
+For classTime and classEndTime use 24-hour format like "13:30" or "18:00". Leave as empty string "" if not stated.
 For type use one of: paper, exam, case, homework, project, discussion.
 For difficulty use 1-5 (doctoral courses are typically 4-5).
 For estHours, estimate the BASE hours to complete the assignment (not including study/review time — that is calculated separately):
@@ -1251,24 +1256,41 @@ Return ONLY the JSON object, nothing else.`}
           text.slice(0,3500)
         );
       }
-      // Save course if new
+      // Save course if new — or fill in any missing professor/class fields on an existing match
       setUploadMsg("Saving course...");
-      let cid=courses.find(c=>c.name===result.courseName)?.id;
+      const existingCourse=courses.find(c=>c.name===result.courseName);
+      let cid=existingCourse?.id;
+      const validClassDays=(result.classDays||[]).filter(d=>["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].includes(d));
       if(!cid){
         const cols=["#6366f1","#0ea5e9","#ec4899","#10b981","#f59e0b","#8b5cf6"];
-        const classDays=(result.classDays||[]).filter(d=>["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].includes(d));
         const{data:cd,error:ce}=await supabase.from("courses").insert({
           user_id:authUser.id,
           name:result.courseName||"New Course",
           difficulty:result.difficulty||3,
           color:cols[courses.length%cols.length],
           professor:result.professorName||"",
-          class_days:classDays,
+          class_days:validClassDays,
           class_time:result.classTime||"",
           class_end_time:result.classEndTime||"",
         }).select().single();
         if(ce)throw new Error(`Course save error: ${ce.message}`);
         if(cd){setCourses(p=>[...p,{...cd,rmpData:null}]);cid=cd.id;}
+      }else{
+        // Course already exists — only fill in fields that are currently EMPTY on the existing
+        // course, so we never overwrite something Angela typed in by hand.
+        const updates={};
+        if(!existingCourse.professor && result.professorName) updates.professor=result.professorName;
+        if((!existingCourse.class_days || existingCourse.class_days.length===0) && validClassDays.length>0) updates.class_days=validClassDays;
+        if(!existingCourse.class_time && result.classTime) updates.class_time=result.classTime;
+        if(!existingCourse.class_end_time && result.classEndTime) updates.class_end_time=result.classEndTime;
+        if(Object.keys(updates).length>0){
+          try{
+            await supabase.from("courses").update(updates).eq("id",cid);
+            setCourses(p=>p.map(x=>x.id===cid?{...x,...updates}:x));
+          }catch(updErr){
+            console.warn("Course field update failed (non-fatal):",updErr);
+          }
+        }
       }
       // Save the original syllabus file + parsed text on the course (best-effort —
       // requires the optional "syllabus_data" jsonb column. If the column is missing
@@ -2581,7 +2603,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                 )}
               </div>
 
-              <div class="dash-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+              <div className="dash-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
                 <div className="card">
                   <div style={{fontSize:10,letterSpacing:2,color:T.accent,textTransform:"uppercase",marginBottom:9}}>Upcoming Deadlines</div>
                   {upcoming.length===0&&<div style={{color:T.faint,fontSize:13}}>All caught up! 🎉</div>}
@@ -2602,8 +2624,10 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                   {todayStudy.slice(0,3).map(b=>(
                     <div key={b.id} style={{display:"flex",alignItems:"center",gap:7,padding:"5px 0",borderBottom:`1px solid ${T.border}`}}>
                       <div style={{width:24,height:24,borderRadius:6,background:b.color+"33",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0}}>📚</div>
-                      <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600}}>{b.title}</div><div style={{fontSize:10,color:T.muted}}>{to12h(b.startTime)} – {to12h(b.endTime)}</div></div>
-                      {completedStudy[b.id]&&<span style={{fontSize:10,color:"#22c55e",fontWeight:700,flexShrink:0}}>✓ Done</span>}
+                      <div style={{flex:1,minWidth:0}}><div style={{fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.title}</div><div style={{fontSize:10,color:T.muted}}>{to12h(b.startTime)} – {to12h(b.endTime)}</div></div>
+                      {completedStudy[b.id]
+                        ?<span style={{fontSize:10,color:"#22c55e",fontWeight:700,flexShrink:0}}>✓ Done</span>
+                        :<button onClick={()=>startFocus(b)} title="Start a 25-min focus session" style={{background:`rgba(${hexToRgb(b.color||T.accent)},.12)`,border:`1px solid ${b.color||T.accent}`,borderRadius:7,padding:"4px 9px",fontSize:11,color:b.color||T.accent,fontWeight:600,cursor:"pointer",fontFamily:"inherit",flexShrink:0,minHeight:28}}>▶ Focus</button>}
                     </div>
                   ))}
                   <div style={{marginTop:9,padding:9,background:T.subcard,borderRadius:8,border:`1px solid ${T.border2}`}}>
@@ -2620,7 +2644,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                   </div>
                 </div>
               </div>
-              <div class="settings-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <div className="settings-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                 <div className="card" style={{borderLeft:`3px solid ${T.accent}`}}>
                   <div style={{fontSize:10,letterSpacing:2,color:T.accent,textTransform:"uppercase",marginBottom:7}}>{["doctoral","postdoc"].includes(profile?.degree_level)?"Dissertation Progress":["graduate"].includes(profile?.degree_level)?"Thesis Progress":"Major Project Progress"}</div>
                   {nextMilestone?(<>
@@ -2821,6 +2845,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                         <span style={{fontSize:10,color:T.muted}}>Est. {a.estHours}h · {sh}h study</span>
                         {hasCards&&<span style={{fontSize:10,color:"#a78bfa"}}>⬡ {a.flashcards.length} cards</span>}
                         <div style={{marginLeft:"auto",display:"flex",gap:5,flexShrink:0}}>
+                          {!a.done&&<button onClick={()=>startFocus({id:`assign-${a.id}-${Date.now()}`,title:a.title,color:course.color})} title="Start a 25-min focus session for this assignment" style={{background:`rgba(${hexToRgb(course.color)},.12)`,border:`1px solid ${course.color}`,borderRadius:7,padding:"5px 9px",fontSize:11,color:course.color,minHeight:30,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>🎯 Focus</button>}
                           <button onClick={()=>{setShowFlashModal(a.id);setView("flashcards");}} style={{background:"transparent",border:`1px solid ${hasCards?"#a78bfa":T.border2}`,borderRadius:7,padding:"5px 9px",fontSize:11,color:hasCards?"#a78bfa":T.muted,minHeight:30}}>{hasCards?"⬡ Cards":"⬡ Gen"}</button>
                           <button onClick={()=>setEditAssign({...a})} style={{background:"transparent",border:`1px solid ${T.border2}`,borderRadius:7,padding:"5px 9px",fontSize:11,color:T.muted,minHeight:30}}>✏️</button>
                           <button onClick={()=>{const existing=grades.find(g=>g.assignmentId===a.id);setGradeInput({score:existing?.score??"",maxScore:existing?.maxScore||100});setShowGradeModal(a);}} style={{background:"transparent",border:`1px solid ${T.border2}`,borderRadius:7,padding:"5px 9px",fontSize:11,color:T.muted,minHeight:30}}>📊</button>
