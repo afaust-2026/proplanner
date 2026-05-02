@@ -185,7 +185,19 @@ function AuthScreen({onAuth}){
       if(!name.trim()){setError("Please enter your name.");setLoading(false);return;}
       const{error:e}=await supabase.auth.signUp({email,password,options:{data:{full_name:name}}});
       if(e)setError(e.message);
-      else setSuccess("Account created! Check your email to confirm, then sign in.");
+      else{
+        setSuccess("Account created! Check your email to confirm, then sign in.");
+        // Best-effort: ping the admin notification endpoint so Angela gets an email.
+        // If this fails, the user's signup still succeeds — we just swallow the error.
+        try{
+          fetch("/api/admin/notify-signup",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({email,name}),
+            keepalive:true,
+          }).catch(()=>{});
+        }catch(_){}
+      }
     }else if(mode==="forgot"){
       if(!email.trim()){setError("Please enter your email address.");setLoading(false);return;}
       const{error:e}=await supabase.auth.resetPasswordForEmail(email,{
