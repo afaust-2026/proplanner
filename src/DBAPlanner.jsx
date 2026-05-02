@@ -495,6 +495,11 @@ export default function ProPlanScholar(){
   const[calToken,setCalToken]=useState(null);
   const[calCopied,setCalCopied]=useState(false);
   const[userPhone,setUserPhone]=useState(""); // for SMS reminders
+  // Push notifications
+  const[pushSupported,setPushSupported]=useState(false);
+  const[pushPermission,setPushPermission]=useState(typeof Notification!=="undefined"?Notification.permission:"default");
+  const[pushSubscribed,setPushSubscribed]=useState(false);
+  const[pushBusy,setPushBusy]=useState(false);
   const[canvasUrl,setCanvasUrl]=useState(""); // Canvas LMS URL
   const[canvasToken,setCanvasToken]=useState(""); // Canvas API token
   const[canvasImporting,setCanvasImporting]=useState(false);
@@ -1372,6 +1377,100 @@ Return ONLY the JSON object, nothing else.`}
     const id=setInterval(()=>setLoaderMsgIndex(i=>i+1),2200);
     return()=>clearInterval(id);
   },[uploading]);
+
+  // ── Push notifications ────────────────────────────────────────────────────
+  // VAPID public key from Vercel env (matches the private key the cron uses)
+  const VAPID_PUBLIC=import.meta.env.VITE_VAPID_PUBLIC_KEY||"";
+
+  function urlB64ToUint8Array(base64String){
+    const padding="=".repeat((4-base64String.length%4)%4);
+    const base64=(base64String+padding).replace(/-/g,"+").replace(/_/g,"/");
+    const raw=atob(base64);
+    const out=new Uint8Array(raw.length);
+    for(let i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);
+    return out;
+  }
+
+  // Register the push service worker on app load (once auth is known)
+  useEffect(()=>{
+    if(typeof window==="undefined")return;
+    const supported="serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+    setPushSupported(supported);
+    if(!supported)return;
+    setPushPermission(Notification.permission);
+    (async()=>{
+      try{
+        const reg=await navigator.serviceWorker.register("/sw-push.js",{scope:"/"});
+        await navigator.serviceWorker.ready;
+        const existing=await reg.pushManager.getSubscription();
+        setPushSubscribed(!!existing);
+      }catch(e){
+        console.warn("sw-push register failed:",e);
+      }
+    })();
+  },[]);
+
+  async function subscribePush(){
+    if(!authUser){notify("Please sign in first.");return;}
+    if(!VAPID_PUBLIC){notify("Push not configured (missing VAPID key).");return;}
+    setPushBusy(true);
+    try{
+      const perm=await Notification.requestPermission();
+      setPushPermission(perm);
+      if(perm!=="granted"){notify("Notifications were blocked. Re-enable in browser settings to subscribe.");return;}
+      const reg=await navigator.serviceWorker.ready;
+      const sub=await reg.pushManager.subscribe({
+        userVisibleOnly:true,
+        applicationServerKey:urlB64ToUint8Array(VAPID_PUBLIC),
+      });
+      const{data:{session}}=await supabase.auth.getSession();
+      const token=session?.access_token||"";
+      const resp=await fetch("/api/push/subscribe",{
+        method:"POST",
+        headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},
+        body:JSON.stringify({subscription:sub.toJSON(),userAgent:navigator.userAgent}),
+      });
+      if(!resp.ok){const t=await resp.text();throw new Error(`Subscribe failed: ${resp.status} ${t}`);}
+      setPushSubscribed(true);
+      notify("Push notifications enabled!");
+    }catch(err){
+      console.error("subscribePush:",err);
+      notify(`Could not enable push: ${err.message||err}`);
+    }finally{
+      setPushBusy(false);
+    }
+  }
+
+  async function unsubscribePush(){
+    setPushBusy(true);
+    try{
+      const reg=await navigator.serviceWorker.ready;
+      const sub=await reg.pushManager.getSubscription();
+      if(!sub){setPushSubscribed(false);return;}
+      const endpoint=sub.endpoint;
+      await sub.unsubscribe();
+      const{data:{session}}=await supabase.auth.getSession();
+      const token=session?.access_token||"";
+      await fetch("/api/push/subscribe",{
+        method:"DELETE",
+        headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},
+        body:JSON.stringify({endpoint}),
+      });
+      setPushSubscribed(false);
+      notify("Push notifications disabled.");
+    }catch(err){
+      console.error("unsubscribePush:",err);
+      notify(`Could not disable push: ${err.message||err}`);
+    }finally{
+      setPushBusy(false);
+    }
+  }
+
+  function togglePushSubscription(){
+    if(pushBusy)return;
+    if(pushSubscribed)unsubscribePush();
+    else subscribePush();
+  }
 
   // ── RMP ───────────────────────────────────────────────────────────────────
   async function handleRmpSearch(cid,profName){
@@ -3564,7 +3663,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
 
                   {/* Tab selector */}
                   <div style={{display:"flex",gap:4,marginBottom:14,flexWrap:"wrap"}}>
-                    {[["outlook","📅 Outlook"],["sms","📱 SMS"],["canvas","📚 Canvas"],["email","📧 Email"]].map(([id,label])=>(
+                    {[["outlook","📅 Outlook"],["sms","📱 SMS"],["canvas","📚 Canvas"],["email","📧 Email"],["push","🔔 Push"]].map(([id,label])=>(
                       <button key={id} onClick={()=>setIntegrationTab(id)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${integrationTab===id?T.accent:T.border2}`,background:integrationTab===id?`rgba(${rgb},.1)`:"transparent",color:integrationTab===id?T.accent:T.muted,fontSize:11,fontWeight:integrationTab===id?700:400,fontFamily:"inherit",cursor:"pointer"}}>{label}</button>
                     ))}
                   </div>
@@ -3694,6 +3793,53 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                         ))}
                       </div>
                       <div style={{fontSize:11,color:T.faint,textAlign:"center"}}>You can unsubscribe at any time from the email or by toggling above.</div>
+                    </div>
+                  )}
+                  {/* PUSH NOTIFICATIONS */}
+                  {integrationTab==="push"&&(
+                    <div>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                        <span style={{fontSize:20}}>🔔</span>
+                        <div style={{flex:1}}>
+                          <div style={{fontWeight:600,fontSize:13}}>Push Notifications</div>
+                          <div style={{fontSize:11,color:pushSupported?T.success:T.muted,fontWeight:600}}>
+                            {pushSupported?"✓ Available now":"⚠ Your browser doesn't support push notifications"}
+                          </div>
+                        </div>
+                        {pushSupported&&(
+                          <button
+                            onClick={togglePushSubscription}
+                            disabled={pushBusy}
+                            style={{width:44,height:24,borderRadius:20,background:pushSubscribed?T.success:T.border2,border:"none",position:"relative",cursor:pushBusy?"wait":"pointer",transition:"background .2s",flexShrink:0,opacity:pushBusy?0.6:1}}>
+                            <div style={{position:"absolute",top:2,left:pushSubscribed?21:2,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,.2)"}}/>
+                          </button>
+                        )}
+                      </div>
+                      <div style={{fontSize:12,color:T.muted,lineHeight:1.7,marginBottom:12}}>
+                        Get a push notification every morning at 8 AM CT with what's coming up — assignments due, today's classes, and study sessions.
+                      </div>
+                      {pushSupported&&pushPermission==="denied"&&(
+                        <div style={{padding:"10px 12px",background:`rgba(${hexToRgb(T.danger)},.08)`,borderRadius:9,border:`1px solid rgba(${hexToRgb(T.danger)},.25)`,marginBottom:12,fontSize:12,color:T.danger}}>
+                          Browser notifications are blocked. To re-enable: open your browser's site settings for proplanscholar.com and switch Notifications to <strong>Allow</strong>, then come back here.
+                        </div>
+                      )}
+                      {pushSupported&&pushSubscribed&&pushPermission==="granted"&&(
+                        <div style={{padding:"10px 12px",background:`rgba(${hexToRgb(T.success)},.08)`,borderRadius:9,border:`1px solid rgba(${hexToRgb(T.success)},.25)`,marginBottom:12,fontSize:12,color:T.success}}>
+                          ✓ This browser is subscribed. You'll get a push every morning at 8 AM CT.
+                        </div>
+                      )}
+                      <div style={{padding:"10px 12px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`,marginBottom:10}}>
+                        <div style={{fontSize:11,fontWeight:600,marginBottom:6}}>Each daily push includes:</div>
+                        {[["🔴","Due TODAY","Any assignments with today's due date"],["🟠","Due tomorrow","One-day-out heads up"],["🟡","Due in 3 days","Time to start working"],["🎓","Today's classes","First class start time and total"],["📚","Today's study","Number of sessions planned"]].map(([icon,t,d])=>(
+                          <div key={t} style={{display:"flex",gap:10,padding:"5px 0",borderBottom:`1px solid ${T.border}`,alignItems:"flex-start"}}>
+                            <span style={{fontSize:14,flexShrink:0,minWidth:18}}>{icon}</span>
+                            <div><div style={{fontSize:12,fontWeight:600}}>{t}</div><div style={{fontSize:10,color:T.muted}}>{d}</div></div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{padding:"8px 12px",background:`rgba(${rgb},.06)`,borderRadius:8,border:`1px solid rgba(${rgb},.15)`,fontSize:11,color:T.muted}}>
+                        💡 Notifications work best when ProPlan Scholar is installed as a PWA (Add to Home Screen). On iPhone, push requires iOS 16.4 or later in PWA mode.
+                      </div>
                     </div>
                   )}
                 </div>
