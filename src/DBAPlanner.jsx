@@ -112,6 +112,19 @@ function buildTheme(primary,dark){
 }
 
 // ─── AUTH SCREEN ──────────────────────────────────────────────────────────────
+// Standalone component — must be outside AuthScreen to prevent focus loss on re-render
+function PwField({value,onChange,placeholder,show,onToggle,onKeyDown}){
+  const inp={width:"100%",background:"#0f0f13",border:"1px solid #2a2a38",borderRadius:8,padding:"10px 13px",color:"#e8e3d8",fontSize:14,outline:"none",fontFamily:"inherit",marginBottom:2};
+  return(
+    <div style={{position:"relative"}}>
+      <input value={value} onChange={onChange} type={show?"text":"password"} placeholder={placeholder||"••••••••"} onKeyDown={onKeyDown} style={{...inp,paddingRight:42}}/>
+      <button type="button" onClick={onToggle} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#7a7590",fontSize:16,padding:2,lineHeight:1}}>
+        {show?"🙈":"👁️"}
+      </button>
+    </div>
+  );
+}
+
 function AuthScreen({onAuth}){
   const[mode,setMode]=useState("login"); // "login" | "signup" | "forgot" | "reset" | "mfa"
   const[email,setEmail]=useState("");
@@ -215,18 +228,6 @@ function AuthScreen({onAuth}){
 
   const inp={width:"100%",background:"#0f0f13",border:"1px solid #2a2a38",borderRadius:8,padding:"10px 13px",color:"#e8e3d8",fontSize:14,outline:"none",fontFamily:"inherit",marginBottom:2};
   const btnPrimary={width:"100%",background:"#6366f1",color:"#fff",border:"none",borderRadius:10,padding:"13px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .2s"};
-
-  // Password field with show/hide toggle
-  function PwField({value,onChange,placeholder,show,onToggle,onKeyDown}){
-    return(
-      <div style={{position:"relative"}}>
-        <input value={value} onChange={onChange} type={show?"text":"password"} placeholder={placeholder||"••••••••"} onKeyDown={onKeyDown} style={{...inp,paddingRight:42}}/>
-        <button type="button" onClick={onToggle} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#7a7590",fontSize:16,padding:2,lineHeight:1}}>
-          {show?"🙈":"👁️"}
-        </button>
-      </div>
-    );
-  }
 
   // MFA screen
   if(mode==="mfa") return(
