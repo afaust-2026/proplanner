@@ -1125,7 +1125,16 @@ export default function ProPlanScholar(){
   // Core handler — accepts a File object directly (used by both file picker AND drag-and-drop)
   async function processSyllabusFile(file){
     if(!file)return;
+    // Fast-fail BEFORE turning on the loader so the books animation doesn't flash
+    // for environments missing the Anthropic API key.
+    const apiKey=import.meta.env.VITE_ANTHROPIC_KEY||"";
+    if(!apiKey){
+      setUploadMsg("Error: API key not found. Check VITE_ANTHROPIC_KEY in Vercel environment variables.");
+      notify("Cannot analyze syllabus — API key is missing.");
+      return;
+    }
     setUploading(true);setUploadMsg("Reading file...");
+    const loaderStart=Date.now();
     const isPDF=file.type==="application/pdf"||file.name.toLowerCase().endsWith(".pdf");
     // Always capture base64 of original file so we can save it for later viewing
     let originalB64="";
@@ -1147,9 +1156,7 @@ export default function ProPlanScholar(){
         // Re-use base64 (FileReader was already called above)
         const base64=originalB64;
         setUploadMsg("Sending PDF to AI...");
-        // Check key is present before calling
-        const apiKey=import.meta.env.VITE_ANTHROPIC_KEY||"";
-        if(!apiKey){throw new Error("API key not found. Check VITE_ANTHROPIC_KEY in Vercel environment variables.");}
+        // (API key was already verified at the top of processSyllabusFile)
         const resp=await fetch("https://api.anthropic.com/v1/messages",{
           method:"POST",
           headers:{
@@ -1290,6 +1297,13 @@ Return ONLY the JSON object, nothing else.`}
       console.error("Syllabus upload error:",err);
       // Show the actual error message on screen so we can debug
       setUploadMsg(`Error: ${err.message||"Unknown error"}`);
+    }
+    // Keep the books animation on screen for at least 1.5s so users actually see it,
+    // even when the API or parsing finishes very fast (or errors out quickly).
+    const elapsed=Date.now()-loaderStart;
+    const minDisplay=1500;
+    if(elapsed<minDisplay){
+      await new Promise(r=>setTimeout(r,minDisplay-elapsed));
     }
     setUploading(false);
   }
