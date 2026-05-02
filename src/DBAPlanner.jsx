@@ -99,15 +99,27 @@ async function claudeProxy(payload){
   const{data:{session}}=await supabase.auth.getSession();
   const token=session?.access_token||"";
   if(!token)throw new Error("Not signed in. Please sign in to use AI features.");
-  const res=await fetch("/api/claude/messages",{
-    method:"POST",
-    headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
-    body:JSON.stringify(payload),
-  });
-  const data=await res.json().catch(()=>({error:{message:"Invalid response from AI proxy"}}));
+  let res;
+  try{
+    res=await fetch("/api/claude/messages",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
+      body:JSON.stringify(payload),
+    });
+  }catch(networkErr){
+    throw new Error(`Network error reaching AI proxy: ${networkErr.message||networkErr}. Check your connection or try again.`);
+  }
+  // Read body as text first so we can include it verbatim in error messages
+  const raw=await res.text();
+  let data=null;
+  try{data=raw?JSON.parse(raw):null;}catch(_){data=null;}
   if(!res.ok){
-    const msg=data?.error?.message||`AI proxy error (${res.status})`;
-    throw new Error(msg);
+    const apiMsg=data?.error?.message;
+    const detail=apiMsg||(raw?raw.slice(0,200):"(empty response)");
+    throw new Error(`AI proxy returned ${res.status}: ${detail}`);
+  }
+  if(!data){
+    throw new Error(`AI proxy returned 200 but the body was not JSON: ${raw.slice(0,200)}`);
   }
   return data;
 }
@@ -1291,7 +1303,11 @@ Return ONLY the JSON object, nothing else.`}
         done:false,topics:a.topics||"",flashcards:[]
       }));
       if(rows.length===0){
-        setUploadMsg("No assignments found in syllabus.");
+        setUploadMsg("No assignments found in this syllabus. Try uploading the original PDF instead of an exported copy, or add the assignments manually.");
+        notify("No assignments found in syllabus.");
+        // Still respect min-display so the books don't flash off too fast
+        const _el=Date.now()-loaderStart;
+        if(_el<1500)await new Promise(r=>setTimeout(r,1500-_el));
         setUploading(false);
         return;
       }
@@ -1302,8 +1318,10 @@ Return ONLY the JSON object, nothing else.`}
       notify(`Syllabus imported! ${rows.length} assignments added.`);
     }catch(err){
       console.error("Syllabus upload error:",err);
-      // Show the actual error message on screen so we can debug
-      setUploadMsg(`Error: ${err.message||"Unknown error"}`);
+      // Show the actual error message inline AND as a toast so it's not missed
+      const msg=err?.message||"Unknown error";
+      setUploadMsg(`Error: ${msg}`);
+      notify(`Syllabus upload failed: ${msg}`);
     }
     // Keep the books animation on screen for at least 1.5s so users actually see it,
     // even when the API or parsing finishes very fast (or errors out quickly).
