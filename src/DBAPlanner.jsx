@@ -2201,8 +2201,15 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
     .tab-bar{display:flex!important;}
     .desktop-sidebar{display:none!important;}
     .main-content{
-      padding:72px 16px 88px!important;
+      /* Clear the 56px fixed header + iPhone notch on top, and the 64px tab bar + home bar on bottom */
+      padding-top:calc(56px + env(safe-area-inset-top) + 14px)!important;
+      padding-bottom:calc(64px + env(safe-area-inset-bottom) + 14px)!important;
+      padding-left:16px!important;
+      padding-right:16px!important;
+      overflow-x:hidden!important;
     }
+    /* Belt-and-suspenders: every card on mobile shrinks rather than overflows */
+    .card{min-width:0!important;max-width:100%!important;overflow:hidden!important;}
     /* Sheet modals */
     .mo{align-items:flex-end;}
     /* Full-width cards */
@@ -2483,7 +2490,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
 
         {/* ═══ MAIN CONTENT ═══ */}
 
-        <main ref={mainRef} className="main-content" style={{flex:1,overflowY:"auto",padding:"24px 28px",minWidth:0,position:"relative",WebkitOverflowScrolling:"touch"}}>
+        <main ref={mainRef} className="main-content" style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:"24px 28px",minWidth:0,maxWidth:"100%",position:"relative",WebkitOverflowScrolling:"touch"}}>
 
 
           {/* PWA Install Banner */}
@@ -2603,22 +2610,22 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                 )}
               </div>
 
-              <div className="dash-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
-                <div className="card">
+              <div className="dash-grid" style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:12,marginBottom:12}}>
+                <div className="card" style={{minWidth:0,overflow:"hidden"}}>
                   <div style={{fontSize:10,letterSpacing:2,color:T.accent,textTransform:"uppercase",marginBottom:9}}>Upcoming Deadlines</div>
                   {upcoming.length===0&&<div style={{color:T.faint,fontSize:13}}>All caught up! 🎉</div>}
                   {upcoming.map(a=>{const course=courses.find(c=>c.id===a.courseId);const days=daysUntil(a.due);return(
                     <div key={a.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:`1px solid ${T.border}`}}>
                       <div style={{width:3,height:26,borderRadius:2,background:course?.color||T.accent,flexShrink:0}}/>
-                      <div style={{flex:1,minWidth:0}}>
+                      <div style={{flex:1,minWidth:0,overflow:"hidden"}}>
                         <div style={{fontSize:12,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{a.title}</div>
-                        <div style={{fontSize:10,color:T.muted}}>{course?.name?.split("–")[0].trim()}</div>
+                        <div style={{fontSize:10,color:T.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{course?.name?.split("–")[0].trim()}</div>
                       </div>
                       <div style={{fontSize:11,fontWeight:700,color:urgencyColor(days,T),flexShrink:0}}>{days<0?"Overdue":days===0?"Today!":`${days}d`}</div>
                     </div>
                   );})}
                 </div>
-                <div className="card">
+                <div className="card" style={{minWidth:0,overflow:"hidden"}}>
                   <div style={{fontSize:10,letterSpacing:2,color:"#0ea5e9",textTransform:"uppercase",marginBottom:9}}>Today</div>
                   {todayStudy.length===0&&<div style={{color:T.faint,fontSize:12,marginBottom:8}}>No study sessions today.</div>}
                   {todayStudy.slice(0,3).map(b=>(
@@ -2644,7 +2651,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                   </div>
                 </div>
               </div>
-              <div className="settings-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <div className="settings-grid" style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:12}}>
                 <div className="card" style={{borderLeft:`3px solid ${T.accent}`}}>
                   <div style={{fontSize:10,letterSpacing:2,color:T.accent,textTransform:"uppercase",marginBottom:7}}>{["doctoral","postdoc"].includes(profile?.degree_level)?"Dissertation Progress":["graduate"].includes(profile?.degree_level)?"Thesis Progress":"Major Project Progress"}</div>
                   {nextMilestone?(<>
