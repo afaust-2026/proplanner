@@ -473,33 +473,33 @@ function Onboarding({user,onComplete}){
     else{alert("Error saving profile. Please try again.");setSaving(false);}
   }
   const wrap=ch=>(
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#0f0f13,#1a1a2e)",fontFamily:"'Inter',system-ui,sans-serif",padding:16}}>
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#f7f5f0",fontFamily:"'DM Sans','Inter',system-ui,sans-serif",padding:16}}>
       <div style={{width:"min(92vw,500px)",padding:"36px 30px",background:"#fff",borderRadius:18,border:"1px solid rgba(0,0,0,.08)",boxShadow:"0 20px 60px rgba(0,0,0,.08)"}}>
         <div style={{display:"flex",gap:5,justifyContent:"center",marginBottom:26}}>
-          {Array.from({length:TOTAL}).map((_,i)=><div key={i} style={{width:i+1===step?20:7,height:7,borderRadius:4,background:i+1<=step?"#6366f1":"#2a2a38",transition:"all .3s"}}/>)}
+          {Array.from({length:TOTAL}).map((_,i)=><div key={i} style={{width:i+1===step?20:7,height:7,borderRadius:4,background:i+1<=step?"#c75b12":"#e8e3d8",transition:"all .3s"}}/>)}
         </div>
         {ch}
       </div>
     </div>
   );
   const nextBtn=(label,disabled,action)=>(
-    <button onClick={action||(()=>setStep(s=>s+1))} disabled={disabled||saving} style={{width:"100%",background:"#6366f1",color:"#fff",border:"none",borderRadius:10,padding:"12px",fontSize:14,fontWeight:600,cursor:disabled?"not-allowed":"pointer",marginTop:20,opacity:disabled?0.5:1,fontFamily:"inherit",transition:"all .2s"}}>
+    <button onClick={action||(()=>setStep(s=>s+1))} disabled={disabled||saving} style={{width:"100%",background:"#0e0e14",color:"#fff",border:"none",borderRadius:100,padding:"14px 24px",fontSize:14,fontWeight:600,cursor:disabled?"not-allowed":"pointer",marginTop:20,opacity:disabled?0.5:1,fontFamily:"inherit",transition:"all .25s",letterSpacing:".2px"}}>
       {saving?"Saving...":label||"Continue →"}
     </button>
   );
   const yesno=(val,onChange)=>(
     <div style={{display:"flex",gap:10,marginTop:16}}>
       {["Yes","No"].map(o=>(
-        <button key={o} onClick={()=>onChange(o==="Yes")} style={{flex:1,padding:"12px",borderRadius:10,border:`2px solid ${val===(o==="Yes")?"#6366f1":"#2a2a38"}`,background:val===(o==="Yes")?"rgba(99,102,241,.12)":"transparent",color:val===(o==="Yes")?"#a5b4fc":"#7a7590",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .2s"}}>
+        <button key={o} onClick={()=>onChange(o==="Yes")} style={{flex:1,padding:"12px",borderRadius:12,border:`2px solid ${val===(o==="Yes")?"#c75b12":"rgba(0,0,0,.10)"}`,background:val===(o==="Yes")?"rgba(199,91,18,.08)":"transparent",color:val===(o==="Yes")?"#c75b12":"#6b6560",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .2s"}}>
           {o==="Yes"?"✓ Yes":"✗ No"}
         </button>
       ))}
     </div>
   );
-  const inp={width:"100%",background:"#0f0f13",border:"1px solid #2a2a38",borderRadius:8,padding:"9px 12px",color:"#0e0e14",fontSize:14,outline:"none",fontFamily:"inherit"};
+  const inp={width:"100%",background:"#f7f5f0",border:"1px solid rgba(0,0,0,.10)",borderRadius:10,padding:"11px 14px",color:"#0e0e14",fontSize:14,outline:"none",fontFamily:"inherit",transition:"border-color .15s,background .15s"};
 
   if(step===1)return wrap(<>
-    <div style={{fontSize:10,letterSpacing:3,color:"#6366f1",textTransform:"uppercase",marginBottom:8}}>Welcome</div>
+    <div style={{fontSize:10,letterSpacing:3,color:"#c75b12",textTransform:"uppercase",marginBottom:8}}>Welcome</div>
     <h2 style={{fontSize:22,fontWeight:700,color:"#0e0e14",marginBottom:6}}>Hi {p.full_name.split(" ")[0]||"there"}! 👋</h2>
     <p style={{fontSize:13,color:"#6b6560",lineHeight:1.7,marginBottom:20}}>Let us set up your planner. A few quick questions so we build a schedule that actually fits your life — not just your classes.</p>
     <div style={{marginBottom:10}}><div style={{fontSize:11,color:"#6b6560",marginBottom:5}}>Your name</div><input value={p.full_name} onChange={e=>setP(x=>({...x,full_name:e.target.value}))} placeholder="Full name" style={inp}/></div>
@@ -507,12 +507,12 @@ function Onboarding({user,onComplete}){
   </>);
 
   if(step===2)return wrap(<>
-    <div style={{fontSize:10,letterSpacing:3,color:"#6366f1",textTransform:"uppercase",marginBottom:8}}>Step 1 of 5</div>
+    <div style={{fontSize:10,letterSpacing:3,color:"#c75b12",textTransform:"uppercase",marginBottom:8}}>Step 1 of 5</div>
     <h2 style={{fontSize:20,fontWeight:700,color:"#0e0e14",marginBottom:5}}>What are you studying for?</h2>
     <p style={{fontSize:12,color:"#6b6560",marginBottom:16,lineHeight:1.6}}>This calibrates your study load and scheduling intensity.</p>
     <div style={{display:"flex",flexDirection:"column",gap:8}}>
       {DEGREE_LEVELS.map(d=>(
-        <div key={d.id} onClick={()=>setP(x=>({...x,degree_level:d.id}))} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",borderRadius:10,border:`2px solid ${p.degree_level===d.id?"#6366f1":"#2a2a38"}`,background:p.degree_level===d.id?"rgba(99,102,241,.1)":"transparent",cursor:"pointer",transition:"all .2s"}}>
+        <div key={d.id} onClick={()=>setP(x=>({...x,degree_level:d.id}))} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",borderRadius:10,border:`2px solid ${p.degree_level===d.id?"#c75b12":"rgba(0,0,0,.10)"}`,background:p.degree_level===d.id?"rgba(199,91,18,.08)":"transparent",cursor:"pointer",transition:"all .2s"}}>
           <span style={{fontSize:20}}>{d.icon}</span>
           <span style={{fontSize:14,color:"#0e0e14",fontWeight:p.degree_level===d.id?600:400}}>{d.label}</span>
           {p.degree_level===d.id&&<span style={{marginLeft:"auto",color:"#6366f1",fontSize:16}}>✓</span>}
@@ -523,7 +523,7 @@ function Onboarding({user,onComplete}){
   </>);
 
   if(step===3)return wrap(<>
-    <div style={{fontSize:10,letterSpacing:3,color:"#6366f1",textTransform:"uppercase",marginBottom:8}}>Step 2 of 5</div>
+    <div style={{fontSize:10,letterSpacing:3,color:"#c75b12",textTransform:"uppercase",marginBottom:8}}>Step 2 of 5</div>
     <h2 style={{fontSize:20,fontWeight:700,color:"#0e0e14",marginBottom:5}}>Your University</h2>
     <p style={{fontSize:12,color:"#6b6560",marginBottom:14,lineHeight:1.6}}>We will theme the app in your school's official colors.</p>
     <div style={{maxHeight:320,overflowY:"auto",display:"flex",flexDirection:"column",gap:6,paddingRight:4}}>
@@ -556,7 +556,7 @@ function Onboarding({user,onComplete}){
   </>);
 
   if(step===4)return wrap(<>
-    <div style={{fontSize:10,letterSpacing:3,color:"#6366f1",textTransform:"uppercase",marginBottom:8}}>Step 3 of 5</div>
+    <div style={{fontSize:10,letterSpacing:3,color:"#c75b12",textTransform:"uppercase",marginBottom:8}}>Step 3 of 5</div>
     <h2 style={{fontSize:20,fontWeight:700,color:"#0e0e14",marginBottom:5}}>Are you a student-athlete?</h2>
     <p style={{fontSize:12,color:"#6b6560",lineHeight:1.6}}>We will block practice and game times so study sessions never conflict.</p>
     {yesno(p.is_athlete,v=>setP(x=>({...x,is_athlete:v,sports:v?x.sports:[]})))}
@@ -564,7 +564,7 @@ function Onboarding({user,onComplete}){
       <p style={{fontSize:12,color:"#6b6560",marginTop:16,marginBottom:10,fontWeight:600}}>Which sport(s)? Select all that apply:</p>
       <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
         {SPORTS_LIST.map(s=>(
-          <button key={s} onClick={()=>toggleSport(s)} style={{padding:"5px 11px",borderRadius:20,border:`1px solid ${p.sports.includes(s)?"#6366f1":"#2a2a38"}`,background:p.sports.includes(s)?"rgba(99,102,241,.15)":"transparent",color:p.sports.includes(s)?"#a5b4fc":"#7a7590",fontSize:12,cursor:"pointer",fontFamily:"inherit",transition:"all .2s"}}>
+          <button key={s} onClick={()=>toggleSport(s)} style={{padding:"5px 11px",borderRadius:20,border:`1px solid ${p.sports.includes(s)?"#c75b12":"rgba(0,0,0,.10)"}`,background:p.sports.includes(s)?"rgba(199,91,18,.10)":"transparent",color:p.sports.includes(s)?"#c75b12":"#6b6560",fontSize:12,cursor:"pointer",fontFamily:"inherit",transition:"all .2s"}}>
             {s}
           </button>
         ))}
@@ -574,7 +574,7 @@ function Onboarding({user,onComplete}){
   </>);
 
   if(step===5)return wrap(<>
-    <div style={{fontSize:10,letterSpacing:3,color:"#6366f1",textTransform:"uppercase",marginBottom:8}}>Step 4 of 5</div>
+    <div style={{fontSize:10,letterSpacing:3,color:"#c75b12",textTransform:"uppercase",marginBottom:8}}>Step 4 of 5</div>
     <h2 style={{fontSize:20,fontWeight:700,color:"#0e0e14",marginBottom:5}}>Greek Life?</h2>
     <p style={{fontSize:12,color:"#6b6560",lineHeight:1.6}}>We will account for chapter meetings, philanthropy events, and other commitments.</p>
     {yesno(p.is_greek,v=>setP(x=>({...x,is_greek:v,greek_org:v?x.greek_org:""})))}
@@ -589,7 +589,7 @@ function Onboarding({user,onComplete}){
   </>);
 
   if(step===6)return wrap(<>
-    <div style={{fontSize:10,letterSpacing:3,color:"#6366f1",textTransform:"uppercase",marginBottom:8}}>Step 5 of 5</div>
+    <div style={{fontSize:10,letterSpacing:3,color:"#c75b12",textTransform:"uppercase",marginBottom:8}}>Step 5 of 5</div>
     <h2 style={{fontSize:20,fontWeight:700,color:"#0e0e14",marginBottom:5}}>Working professional?</h2>
     <p style={{fontSize:12,color:"#6b6560",lineHeight:1.6}}>We will build your work schedule day-by-day so study sessions only land in your free time.</p>
     {yesno(p.is_working_professional,v=>setP(x=>({...x,is_working_professional:v})))}
@@ -2500,18 +2500,22 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
   // ── Auth / onboarding gates ─────────────────────────────────────────────────
   // Guard: if supabase failed to init, show config error instead of crashing
   if(!supabase)return(
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#0f0f13",fontFamily:"'Inter',system-ui,sans-serif",padding:20}}>
-      <div style={{textAlign:"center",maxWidth:400}}>
-        <div style={{fontSize:40,marginBottom:16}}>⚙️</div>
-        <div style={{color:"#ef4444",fontSize:16,fontWeight:700,marginBottom:8}}>Configuration Error</div>
-        <div style={{color:"#7a7590",fontSize:13,lineHeight:1.7}}>Missing Supabase environment variables.<br/>Please check that <code style={{background:"#1e1e2e",padding:"1px 6px",borderRadius:4}}>VITE_SUPABASE_URL</code> and <code style={{background:"#1e1e2e",padding:"1px 6px",borderRadius:4}}>VITE_SUPABASE_ANON</code> are set in Vercel and redeploy.</div>
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#f7f5f0",fontFamily:"'DM Sans','Inter',system-ui,sans-serif",padding:20}}>
+      <div style={{textAlign:"center",maxWidth:440,padding:"40px 32px",background:"#fff",borderRadius:18,border:"1px solid rgba(0,0,0,.08)",boxShadow:"0 20px 60px rgba(0,0,0,.08)"}}>
+        <div style={{fontSize:40,marginBottom:14}}>⚙️</div>
+        <div style={{fontSize:24,color:"#0e0e14",fontFamily:"'Instrument Serif',Georgia,serif",letterSpacing:"-.5px",marginBottom:10}}>Configuration <em style={{fontStyle:"italic",color:"#c75b12"}}>error</em></div>
+        <div style={{color:"#6b6560",fontSize:13,lineHeight:1.7}}>Missing Supabase environment variables.<br/>Please check that <code style={{background:"#f0ece3",padding:"2px 7px",borderRadius:5,color:"#0e0e14",fontFamily:"'SF Mono','Monaco',monospace",fontSize:12}}>VITE_SUPABASE_URL</code> and <code style={{background:"#f0ece3",padding:"2px 7px",borderRadius:5,color:"#0e0e14",fontFamily:"'SF Mono','Monaco',monospace",fontSize:12}}>VITE_SUPABASE_ANON</code> are set in Vercel and redeploy.</div>
       </div>
     </div>
   );
 
   if(authLoading)return(
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#0f0f13",fontFamily:"'Inter',system-ui,sans-serif"}}>
-      <div style={{textAlign:"center"}}><div style={{fontSize:40,marginBottom:16}}>🎓</div><div style={{color:"#7a7590",fontSize:14}}>Loading ProPlan Scholar...</div></div>
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#f7f5f0",fontFamily:"'DM Sans','Inter',system-ui,sans-serif"}}>
+      <div style={{textAlign:"center"}}>
+        <div style={{fontSize:40,marginBottom:14}}>🎓</div>
+        <div style={{fontSize:24,color:"#0e0e14",fontFamily:"'Instrument Serif',Georgia,serif",letterSpacing:"-.5px",marginBottom:6}}>ProPlan <em style={{fontStyle:"italic",color:"#c75b12"}}>Scholar</em></div>
+        <div style={{color:"#6b6560",fontSize:13,fontStyle:"italic",fontFamily:"'Instrument Serif',Georgia,serif"}}>Loading...</div>
+      </div>
     </div>
   );
 
