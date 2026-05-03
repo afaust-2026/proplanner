@@ -30,20 +30,42 @@ function to12h(t){
   return m===0?`${h12} ${ampm}`:`${h12}:${String(m).padStart(2,"0")} ${ampm}`;
 }
 function hexToRgb(hex){try{const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return`${r},${g},${b}`;}catch{return"99,102,241";}}
+function pctToGPA(pct){
+  if(pct>=93)return 4.0;if(pct>=90)return 3.7;if(pct>=87)return 3.3;if(pct>=83)return 3.0;
+  if(pct>=80)return 2.7;if(pct>=77)return 2.3;if(pct>=73)return 2.0;if(pct>=70)return 1.7;
+  if(pct>=67)return 1.3;if(pct>=63)return 1.0;if(pct>=60)return 0.7;return 0.0;
+}
+function pctToLetterGrade(pct){
+  if(pct>=93)return"A";if(pct>=90)return"A-";if(pct>=87)return"B+";if(pct>=83)return"B";
+  if(pct>=80)return"B-";if(pct>=77)return"C+";if(pct>=73)return"C";if(pct>=70)return"C-";
+  if(pct>=67)return"D+";if(pct>=63)return"D";if(pct>=60)return"D-";return"F";
+}
 function calcGPA(grades, courses, assignments){
-  // Calculate per-course percentage, then map to 4.0 scale
-  const courseGrades={};
+  const byCourse={};
   grades.forEach(g=>{
-    if(!courseGrades[g.courseId])courseGrades[g.courseId]={totalScore:0,totalMax:0};
-    courseGrades[g.courseId].totalScore+=g.score;
-    courseGrades[g.courseId].totalMax+=g.maxScore;
+    const a=(assignments||[]).find(x=>x.id===g.assignmentId);
+    const weight=a&&a.weight!=null?Number(a.weight):null;
+    if(!byCourse[g.courseId])byCourse[g.courseId]=[];
+    byCourse[g.courseId].push({score:g.score,maxScore:g.maxScore,weight});
   });
-  const gpas=Object.entries(courseGrades).map(([cid,{totalScore,totalMax}])=>{
-    const pct=totalMax>0?(totalScore/totalMax)*100:0;
-    // Standard percentage to GPA: 93+=4.0, 90+=3.7, 87+=3.3, 83+=3.0, 80+=2.7, 77+=2.3, 73+=2.0, 70+=1.7, 67+=1.3, 63+=1.0, 60+=0.7, <60=0.0
-    let gpa=0;
-    if(pct>=93)gpa=4.0;else if(pct>=90)gpa=3.7;else if(pct>=87)gpa=3.3;else if(pct>=83)gpa=3.0;else if(pct>=80)gpa=2.7;else if(pct>=77)gpa=2.3;else if(pct>=73)gpa=2.0;else if(pct>=70)gpa=1.7;else if(pct>=67)gpa=1.3;else if(pct>=63)gpa=1.0;else if(pct>=60)gpa=0.7;else gpa=0.0;
-    return{courseId:cid,pct,gpa};
+  const gpas=Object.entries(byCourse).map(([cid,entries])=>{
+    const anyWeighted=entries.some(e=>e.weight!=null&&e.weight>0);
+    let pct=0;
+    if(anyWeighted){
+      let weightedTotal=0,weightSum=0;
+      entries.forEach(e=>{
+        if(e.weight==null||e.weight<=0)return;
+        const itemPct=e.maxScore>0?(e.score/e.maxScore)*100:0;
+        weightedTotal+=itemPct*e.weight;
+        weightSum+=e.weight;
+      });
+      pct=weightSum>0?weightedTotal/weightSum:0;
+    } else {
+      const totalScore=entries.reduce((s,e)=>s+e.score,0);
+      const totalMax=entries.reduce((s,e)=>s+e.maxScore,0);
+      pct=totalMax>0?(totalScore/totalMax)*100:0;
+    }
+    return{courseId:cid,pct,gpa:pctToGPA(pct),weighted:anyWeighted};
   });
   const overall=gpas.length>0?gpas.reduce((s,g)=>s+g.gpa,0)/gpas.length:0;
   return{courseGrades:gpas,overall:Math.round(overall*100)/100};
@@ -1373,10 +1395,13 @@ Return ONLY a valid JSON object — no explanation, no markdown, no backticks. J
       "due": "YYYY-MM-DD",
       "type": "paper",
       "estHours": 4,
-      "topics": "key topics covered"
+      "topics": "key topics covered",
+      "weight": 25
     }
   ]
 }
+
+For "weight": include this ONLY if the syllabus specifies grade weighting (e.g. "Final Exam = 25%", "Papers worth 40% of final grade"). Express as a number 0-100 representing the percentage that assignment contributes to the final course grade. If the syllabus says "All 5 homework assignments collectively worth 20%", split evenly (each homework weight=4). If the syllabus does NOT specify grade weighting, OMIT the weight field entirely.
 
 For classDays use the days the class actually meets, from this list: Sun, Mon, Tue, Wed, Thu, Fri, Sat. If the syllabus says "MWF" use ["Mon","Wed","Fri"]; "TR" or "T/Th" means ["Tue","Thu"]. Leave classDays as an empty array [] if it's an asynchronous online course or the meeting schedule is not stated.
 For classTime and classEndTime use 24-hour format like "13:30" or "18:00". Leave as empty string "" if not stated.
@@ -1411,7 +1436,7 @@ Return ONLY the JSON object, nothing else.`}
         originalText=text;
         setUploadMsg("Analyzing with AI...");
         result=await callClaudeJSON(
-          `Parse this academic syllabus. Return ONLY valid JSON: {"courseName":"","professorName":"","difficulty":1-5,"classDays":["Mon","Wed"],"classTime":"18:00","classEndTime":"20:00","assignments":[{"title":"","due":"YYYY-MM-DD","type":"paper|exam|case|homework|project|discussion","estHours":2,"topics":"key topics or description"}]}. For estHours use BASE completion time only: discussion=1-2h, homework=1-3h, case=2-4h, project=4-10h, paper=3-8h, exam=2-4h, doctoral dissertation=8-20h. For difficulty: 1=very easy, 3=average, 5=very hard (doctoral courses typically 4-5). classDays uses Mon/Tue/Wed/Thu/Fri/Sat/Sun. classTime 24hr format. Assume year ${new Date().getFullYear()}.`,
+          `Parse this academic syllabus. Return ONLY valid JSON: {"courseName":"","professorName":"","difficulty":1-5,"classDays":["Mon","Wed"],"classTime":"18:00","classEndTime":"20:00","assignments":[{"title":"","due":"YYYY-MM-DD","type":"paper|exam|case|homework|project|discussion","estHours":2,"topics":"key topics or description","weight":25}]}. For estHours use BASE completion time only: discussion=1-2h, homework=1-3h, case=2-4h, project=4-10h, paper=3-8h, exam=2-4h, doctoral dissertation=8-20h. For difficulty: 1=very easy, 3=average, 5=very hard (doctoral courses typically 4-5). classDays uses Mon/Tue/Wed/Thu/Fri/Sat/Sun. classTime 24hr format. For weight: include ONLY if syllabus specifies grade weighting (e.g. "Final = 25%"); express as 0-100 percentage; if a category like "all homework worth 20%" covers multiple assignments, split evenly. OMIT entirely when no weighting is specified. Assume year ${new Date().getFullYear()}.`,
           text.slice(0,3500)
         );
       }
@@ -1481,7 +1506,8 @@ Return ONLY the JSON object, nothing else.`}
         due_date:a.due||new Date().toISOString().slice(0,10),
         type:a.type||"paper",
         est_hours:a.estHours||4,
-        done:false,topics:a.topics||"",flashcards:[]
+        done:false,topics:a.topics||"",flashcards:[],
+        ...(a.weight!=null&&!isNaN(Number(a.weight))?{weight:Number(a.weight)}:{}),
       }));
       if(rows.length===0){
         setUploadMsg("No assignments found in this syllabus. Try uploading the original PDF instead of an exported copy, or add the assignments manually.");
@@ -1494,7 +1520,7 @@ Return ONLY the JSON object, nothing else.`}
       }
       const{data:ad,error:ae}=await supabase.from("assignments").insert(rows).select();
       if(ae)throw new Error(`Assignment save error: ${ae.message}`);
-      if(ad)setAssignments(p=>[...p,...ad.map(x=>({...x,courseId:x.course_id,due:x.due_date,estHours:x.est_hours,flashcards:[]}))]);
+      if(ad)setAssignments(p=>[...p,...ad.map(x=>({...x,courseId:x.course_id,due:x.due_date,estHours:x.est_hours,flashcards:[],weight:x.weight}))]);
       setUploadMsg(`✓ Imported ${rows.length} assignments from ${result.courseName}`);
       notify(`Syllabus imported! ${rows.length} assignments added.`);
     }catch(err){
@@ -2871,7 +2897,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                 </div>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:10,marginBottom:14}}>
-                {[{l:"Courses",v:courses.length,c:T.accent,nav:"courses"},{l:"Pending",v:assignments.filter(a=>!a.done).length,c:T.warning,nav:"assignments"},{l:"Study Hrs Complete",v:Object.keys(completedStudy).filter(k=>completedStudy[k]).length*2,c:"#0ea5e9",nav:"calendar"},{l:"Milestones",v:milestones.filter(m=>!m.done).length,c:"#a78bfa",nav:"major-project"},{l:"Done",v:assignments.filter(a=>a.done).length,c:T.success,nav:"assignments"},{l:"Streak",v:`${studyStreak}d 🔥`,c:"#f97316",nav:"analytics"}].map(s=>(
+                {(()=>{const _g=calcGPA(grades,courses,assignments);return[{l:"Courses",v:courses.length,c:T.accent,nav:"courses"},{l:"Pending",v:assignments.filter(a=>!a.done).length,c:T.warning,nav:"assignments"},{l:"GPA",v:grades.length>0?_g.overall.toFixed(2):"—",c:"#a78bfa",nav:"analytics"},{l:"Study Hrs Complete",v:Object.keys(completedStudy).filter(k=>completedStudy[k]).length*2,c:"#0ea5e9",nav:"calendar"},{l:"Milestones",v:milestones.filter(m=>!m.done).length,c:"#a78bfa",nav:"major-project"},{l:"Done",v:assignments.filter(a=>a.done).length,c:T.success,nav:"assignments"},{l:"Streak",v:`${studyStreak}d 🔥`,c:"#f97316",nav:"analytics"}];})().map(s=>(
                   <div key={s.l} className="card stat-card" onClick={()=>setView(s.nav)} title={`Go to ${s.nav}`} style={{textAlign:"center",borderTop:`2px solid ${s.c}`,minWidth:90,flexShrink:0}}>
                     <div style={{fontSize:26,fontWeight:700,color:s.c}}>{s.v}</div>
                     <div style={{fontSize:9,color:T.muted,marginTop:2,letterSpacing:1,textTransform:"uppercase"}}>{s.l}</div>
@@ -3198,7 +3224,15 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                       {/* Bottom row: type tag + action buttons */}
                       <div style={{display:"flex",alignItems:"center",gap:6,marginTop:7,paddingTop:6,borderTop:`1px solid ${T.border}`,flexWrap:"wrap"}}>
                         <span className="tag" style={{background:course.color+"22",color:course.color}}>{a.type}</span>
-                        <span style={{fontSize:10,color:T.muted}}>Est. {a.estHours}h · {sh}h study</span>
+                        <span style={{fontSize:10,color:T.muted}}>Est. {a.estHours}h · {sh}h study{a.weight!=null&&!isNaN(Number(a.weight))?` · ${Number(a.weight)}% wt`:""}</span>
+                        {(()=>{
+                          const g=grades.find(x=>x.assignmentId===a.id);
+                          if(!g||!g.maxScore)return null;
+                          const p=(g.score/g.maxScore)*100;
+                          const lt=pctToLetterGrade(p);
+                          const c=p>=90?T.success:p>=80?"#0ea5e9":p>=70?T.caution:p>=60?T.warning:T.danger;
+                          return<span style={{fontSize:10,fontWeight:700,color:c,padding:"2px 6px",borderRadius:5,background:`rgba(${hexToRgb(c)},.12)`}}>{lt} · {p.toFixed(0)}%</span>;
+                        })()}
                         {hasCards&&<span style={{fontSize:10,color:"#a78bfa"}}>⬡ {a.flashcards.length} cards</span>}
                         <div style={{marginLeft:"auto",display:"flex",gap:5,flexShrink:0}}>
                           {!a.done&&<button onClick={()=>startFocus({id:`assign-${a.id}-${Date.now()}`,title:a.title,color:course.color})} title="Start a 25-min focus session for this assignment" style={{background:`rgba(${hexToRgb(course.color)},.12)`,border:`1px solid ${course.color}`,borderRadius:7,padding:"5px 9px",fontSize:11,color:course.color,minHeight:30,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>🎯 Focus</button>}
@@ -3390,6 +3424,19 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                         <span style={{fontSize:10,color:T.muted,fontWeight:400}}>open</span>
                       </button>
                     )}
+                    {(()=>{
+                      const cg=calcGPA(grades,courses,assignments).courseGrades.find(g=>g.courseId===c.id);
+                      if(!cg)return null;
+                      const lt=pctToLetterGrade(cg.pct);
+                      const col=cg.pct>=90?T.success:cg.pct>=80?"#0ea5e9":cg.pct>=70?T.caution:cg.pct>=60?T.warning:T.danger;
+                      return(
+                        <div onClick={()=>setView("analytics")} title="View full GPA breakdown" style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",marginBottom:7,background:`rgba(${hexToRgb(col)},.08)`,border:`1px solid rgba(${hexToRgb(col)},.25)`,borderRadius:8,cursor:"pointer"}}>
+                          <span style={{fontSize:10,color:T.muted,letterSpacing:1,textTransform:"uppercase",fontWeight:600,flex:1}}>Current Grade {cg.weighted?"(weighted)":""}</span>
+                          <span style={{fontSize:18,fontWeight:800,color:col,lineHeight:1}}>{lt}</span>
+                          <span style={{fontSize:13,fontWeight:600,color:col}}>{cg.pct.toFixed(1)}%</span>
+                        </div>
+                      );
+                    })()}
                     <div className="prog-bar" style={{marginBottom:5}}><div className="prog-fill" style={{width:`${pct}%`,background:c.color}}/></div>
                     <div style={{fontSize:10,color:T.muted,marginBottom:next?7:0}}>{done}/{total} complete · {"★".repeat(c.difficulty)}{"☆".repeat(5-c.difficulty)}</div>
                     {next&&(()=>{const d=daysUntil(next.due);return(<div onClick={()=>setEditAssign({...next})} style={{fontSize:11,padding:"5px 8px",background:T.subcard,borderRadius:6,cursor:"pointer",transition:"background .2s"}}>Next: <span style={{color:c.color,fontWeight:600,textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:2}}>{next.title}</span> · {d<0?<span style={{color:T.danger}}>{Math.abs(d)}d overdue</span>:`${d}d`}</div>);})()}
@@ -4506,6 +4553,7 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
             </div>
           </div>
           <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Estimated Hours: {editAssign.estHours}</div><input type="range" min={1} max={30} value={editAssign.estHours} onChange={e=>setEditAssign(a=>({...a,estHours:+e.target.value}))} style={{width:"100%",accentColor:T.accent}}/></div>
+          <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Weight in course grade <span style={{color:T.faint}}>(0-100%, optional)</span></div><input type="number" min={0} max={100} step={1} placeholder="e.g. 25 for a final worth 25%" value={editAssign.weight??""} onChange={e=>setEditAssign(a=>({...a,weight:e.target.value===""?null:Math.max(0,Math.min(100,Number(e.target.value)))}))} className="ifield" style={{fontSize:12}}/></div>
           <div><div style={{fontSize:11,color:T.muted,marginBottom:3}}>Notes / Topics</div><textarea className="ifield" rows={2} value={editAssign.topics||""} onChange={e=>setEditAssign(a=>({...a,topics:e.target.value}))} style={{resize:"vertical",fontSize:12}} placeholder="Key topics, notes for flashcards..."/></div>
           <div style={{display:"flex",gap:8,marginTop:4}}><button className="bg2" style={{flex:1}} onClick={()=>setEditAssign(null)}>Cancel</button><button className="bp" style={{flex:1}} onClick={saveEditAssignment}>Save Changes</button></div>
         </div>
