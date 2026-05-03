@@ -3259,20 +3259,9 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:13,flexWrap:"wrap",gap:8}}>
                 <div><div style={{fontSize:10,letterSpacing:3,color:T.accent,textTransform:"uppercase"}}>Enrolled</div><h1 style={{fontSize:22,fontWeight:700}}>Courses</h1></div>
                 <div style={{display:"flex",gap:8,flexShrink:0,alignItems:"center"}}>
-                  <label
-                    className={"syl-drop-mini"+(isDragging?" is-dragging":"")}
-                    onDragOver={handleSyllabusDragOver}
-                    onDragEnter={handleSyllabusDragOver}
-                    onDragLeave={handleSyllabusDragLeave}
-                    onDrop={handleSyllabusDrop}
-                    title="Click to choose, or drag a syllabus file here">
-                    <input type="file" accept=".txt,.pdf,.docx" onChange={handleSyllabusUpload} style={{display:"none"}}/>
-                    <span style={{whiteSpace:"nowrap"}}>{uploading?"Analyzing…":isDragging?"⬇ Drop to upload":"📄 Upload or drop syllabus"}</span>
-                  </label>
                   <button className="bp" onClick={()=>setShowAddCourse(true)}>+ Add Course</button>
                 </div>
               </div>
-              {courses.length===0&&<div style={{color:T.faint,fontSize:13,padding:"20px",textAlign:"center"}}>No courses yet. Click Add Course or upload a syllabus to get started.</div>}
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(270px,1fr))",gap:12}}>
                 {courses.map(c=>{
                   const total=assignments.filter(a=>a.courseId===c.id).length;
@@ -3446,6 +3435,26 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
                     {next&&(()=>{const d=daysUntil(next.due);return(<div onClick={()=>setEditAssign({...next})} style={{fontSize:11,padding:"5px 8px",background:T.subcard,borderRadius:6,cursor:"pointer",transition:"background .2s"}}>Next: <span style={{color:c.color,fontWeight:600,textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:2}}>{next.title}</span> · {d<0?<span style={{color:T.danger}}>{Math.abs(d)}d overdue</span>:`${d}d`}</div>);})()}
                   </div>);
                 })}
+              </div>
+              {/* ── BIG CENTERED SYLLABUS DROPZONE — sits below course grid ── */}
+              <div style={{display:"flex",justifyContent:"center",marginTop:24,marginBottom:8}}>
+                <label
+                  className={"syl-drop"+(isDragging?" is-dragging":"")}
+                  onDragOver={handleSyllabusDragOver}
+                  onDragEnter={handleSyllabusDragOver}
+                  onDragLeave={handleSyllabusDragLeave}
+                  onDrop={handleSyllabusDrop}
+                  style={{width:"100%",maxWidth:560,padding:"36px 28px",textAlign:"center"}}>
+                  <input type="file" accept=".txt,.pdf,.docx" onChange={handleSyllabusUpload} style={{display:"none"}}/>
+                  <div style={{fontSize:42,marginBottom:10}}>📄</div>
+                  <div style={{fontSize:16,color:T.text,fontWeight:700,marginBottom:6}}>
+                    {uploading?"Analyzing your syllabus…":isDragging?"Drop your syllabus to upload":courses.length===0?"Get started — drop a syllabus here":"Add another course"}
+                  </div>
+                  <div style={{fontSize:13,color:T.muted,lineHeight:1.6,maxWidth:380,margin:"0 auto"}}>
+                    Drag a PDF, .txt, or .docx anywhere in this box — or click to choose a file. AI will pull out the course name, professor, class meeting times, and every assignment with its due date.
+                  </div>
+                  {uploadMsg&&<div style={{fontSize:11,marginTop:12,color:T.success,fontWeight:600}}>{uploadMsg}</div>}
+                </label>
               </div>
             </div>
           )}
