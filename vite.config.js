@@ -16,7 +16,11 @@ export default defineConfig({
         scope: '/',
         display: 'standalone',
         orientation: 'portrait-primary',
-        background_color: '#0e0e14',
+        // background_color is what iOS/Android paints behind the splash on PWA launch.
+        // Match the warm cream paper from landing page so the transition feels seamless.
+        background_color: '#f7f5f0',
+        // theme_color tints the iPhone status bar / Android browser chrome (the JS code
+        // overrides this per-school once the app loads, but this is the initial value).
         theme_color: '#C75B12',
         categories: ['education', 'productivity'],
         icons: [
