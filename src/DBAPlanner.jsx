@@ -288,30 +288,30 @@ function AuthScreen({onAuth}){
 
   function switchMode(m){setMode(m);setError("");setSuccess("");setPassword("");setConfirmPassword("");}
 
-  const inp={width:"100%",background:"#0f0f13",border:"1px solid #2a2a38",borderRadius:8,padding:"10px 13px",color:"#e8e3d8",fontSize:14,outline:"none",fontFamily:"inherit",marginBottom:2};
-  const btnPrimary={width:"100%",background:"#6366f1",color:"#fff",border:"none",borderRadius:10,padding:"13px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .2s"};
+  const inp={width:"100%",background:"#f7f5f0",border:"1px solid rgba(0,0,0,.10)",borderRadius:10,padding:"12px 14px",color:"#0e0e14",fontSize:14,outline:"none",fontFamily:"inherit",marginBottom:2,transition:"border-color .15s,background .15s"};
+  const btnPrimary={width:"100%",background:"#0e0e14",color:"#fff",border:"none",borderRadius:100,padding:"14px 24px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .25s",letterSpacing:".2px"};
 
   // ── Reset password screen ──────────────────────────────────────────────────
   if(mode==="reset") return(
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#0f0f13 0%,#1a1a2e 100%)",fontFamily:"'Inter',system-ui,sans-serif"}}>
-      <div style={{width:"min(92vw,420px)",padding:"clamp(24px,5vw,40px) clamp(18px,4vw,36px)",background:"#16161f",borderRadius:20,border:"1px solid #2a2a38",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#f7f5f0",fontFamily:"'DM Sans','Inter',system-ui,sans-serif"}}>
+      <div style={{width:"min(92vw,420px)",padding:"clamp(24px,5vw,40px) clamp(18px,4vw,36px)",background:"#fff",borderRadius:18,border:"1px solid rgba(0,0,0,.08)",boxShadow:"0 20px 60px rgba(0,0,0,.08)"}}>
         <div style={{textAlign:"center",marginBottom:28}}>
           <div style={{fontSize:40,marginBottom:10}}>🔐</div>
-          <div style={{fontSize:22,fontWeight:700,color:"#e8e3d8"}}>Set New Password</div>
-          <div style={{fontSize:12,color:"#7a7590",marginTop:5}}>Choose a strong password for your account</div>
+          <div style={{fontSize:28,color:"#0e0e14",fontFamily:"'Instrument Serif',Georgia,serif",letterSpacing:"-.5px"}}>Set new <em style={{color:"#c75b12",fontStyle:"italic"}}>password</em></div>
+          <div style={{fontSize:12,color:"#6b6560",marginTop:5}}>Choose a strong password for your account</div>
         </div>
         <div style={{marginBottom:14}}>
-          <div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>New Password</div>
+          <div style={{fontSize:11,color:"#6b6560",marginBottom:5}}>New Password</div>
           <div style={{position:"relative"}}>
             <input value={password} onChange={e=>setPassword(e.target.value)} type={showPwd?"text":"password"} placeholder="At least 6 characters" style={{...inp,paddingRight:42}} autoComplete="new-password"/>
-            <button type="button" onClick={()=>setShowPwd(s=>!s)} aria-label={showPwd?"Hide password":"Show password"} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"transparent",border:"none",color:"#7a7590",cursor:"pointer",padding:"6px 8px",fontSize:16,lineHeight:1,fontFamily:"inherit"}}>{showPwd?"🙈":"👁"}</button>
+            <button type="button" onClick={()=>setShowPwd(s=>!s)} aria-label={showPwd?"Hide password":"Show password"} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"transparent",border:"none",color:"#6b6560",cursor:"pointer",padding:"6px 10px",fontSize:16,lineHeight:1,fontFamily:"inherit"}}>{showPwd?"🙈":"👁"}</button>
           </div>
         </div>
         <div style={{marginBottom:22}}>
-          <div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>Confirm New Password</div>
+          <div style={{fontSize:11,color:"#6b6560",marginBottom:5}}>Confirm New Password</div>
           <div style={{position:"relative"}}>
             <input value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} type={showConfirmPwd?"text":"password"} placeholder="Repeat your new password" onKeyDown={e=>e.key==="Enter"&&submit()} style={{...inp,paddingRight:42}} autoComplete="new-password"/>
-            <button type="button" onClick={()=>setShowConfirmPwd(s=>!s)} aria-label={showConfirmPwd?"Hide password":"Show password"} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"transparent",border:"none",color:"#7a7590",cursor:"pointer",padding:"6px 8px",fontSize:16,lineHeight:1,fontFamily:"inherit"}}>{showConfirmPwd?"🙈":"👁"}</button>
+            <button type="button" onClick={()=>setShowConfirmPwd(s=>!s)} aria-label={showConfirmPwd?"Hide password":"Show password"} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"transparent",border:"none",color:"#6b6560",cursor:"pointer",padding:"6px 10px",fontSize:16,lineHeight:1,fontFamily:"inherit"}}>{showConfirmPwd?"🙈":"👁"}</button>
           </div>
         </div>
         {/* Password strength indicator */}
@@ -320,10 +320,10 @@ function AuthScreen({onAuth}){
             <div style={{display:"flex",gap:4,marginBottom:4}}>
               {[1,2,3,4].map(i=>{
                 const strength=password.length>=8&&/[A-Z]/.test(password)&&/[0-9]/.test(password)?4:password.length>=8?3:password.length>=6?2:1;
-                return<div key={i} style={{flex:1,height:3,borderRadius:2,background:i<=strength?["","#ef4444","#f59e0b","#3b82f6","#22c55e"][strength]:"#2a2a38",transition:"background .3s"}}/>;
+                return<div key={i} style={{flex:1,height:3,borderRadius:2,background:i<=strength?["","#ef4444","#f59e0b","#3b82f6","#22c55e"][strength]:"#e8e3d8",transition:"background .3s"}}/>;
               })}
             </div>
-            <div style={{fontSize:10,color:"#7a7590"}}>{password.length<6?"Too short":password.length<8?"Fair — add numbers or capitals":!/[0-9]/.test(password)?"Good — add a number for better security":"Strong password ✓"}</div>
+            <div style={{fontSize:10,color:"#6b6560"}}>{password.length<6?"Too short":password.length<8?"Fair — add numbers or capitals":!/[0-9]/.test(password)?"Good — add a number for better security":"Strong password ✓"}</div>
           </div>
         )}
         {error&&<div style={{fontSize:12,color:"#ef4444",background:"rgba(239,68,68,.1)",padding:"9px 13px",borderRadius:8,marginBottom:14,border:"1px solid rgba(239,68,68,.3)"}}>{error}</div>}
@@ -337,22 +337,22 @@ function AuthScreen({onAuth}){
 
   // ── Forgot password screen ──────────────────────────────────────────────────
   if(mode==="forgot") return(
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#0f0f13 0%,#1a1a2e 100%)",fontFamily:"'Inter',system-ui,sans-serif"}}>
-      <div style={{width:"min(92vw,420px)",padding:"clamp(24px,5vw,40px) clamp(18px,4vw,36px)",background:"#16161f",borderRadius:20,border:"1px solid #2a2a38",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
-        <button onClick={()=>switchMode("login")} style={{background:"transparent",border:"none",color:"#7a7590",fontSize:13,cursor:"pointer",fontFamily:"inherit",marginBottom:20,display:"flex",alignItems:"center",gap:5,padding:0}}>← Back to Sign In</button>
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#f7f5f0",fontFamily:"'DM Sans','Inter',system-ui,sans-serif"}}>
+      <div style={{width:"min(92vw,420px)",padding:"clamp(24px,5vw,40px) clamp(18px,4vw,36px)",background:"#fff",borderRadius:18,border:"1px solid rgba(0,0,0,.08)",boxShadow:"0 20px 60px rgba(0,0,0,.08)"}}>
+        <button onClick={()=>switchMode("login")} style={{background:"transparent",border:"none",color:"#6b6560",fontSize:13,cursor:"pointer",fontFamily:"inherit",marginBottom:20,display:"flex",alignItems:"center",gap:5,padding:0}}>← Back to Sign In</button>
         <div style={{textAlign:"center",marginBottom:28}}>
           <div style={{fontSize:40,marginBottom:10}}>📧</div>
-          <div style={{fontSize:22,fontWeight:700,color:"#e8e3d8"}}>Reset Your Password</div>
-          <div style={{fontSize:12,color:"#7a7590",marginTop:5,lineHeight:1.6}}>Enter your email address and we will send you a link to reset your password.</div>
+          <div style={{fontSize:28,color:"#0e0e14",fontFamily:"'Instrument Serif',Georgia,serif",letterSpacing:"-.5px"}}>Reset your <em style={{color:"#c75b12",fontStyle:"italic"}}>password</em></div>
+          <div style={{fontSize:12,color:"#6b6560",marginTop:5,lineHeight:1.6}}>Enter your email address and we will send you a link to reset your password.</div>
         </div>
-        <div style={{marginBottom:22}}><div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>Email Address</div><input value={email} onChange={e=>setEmail(e.target.value)} type="email" placeholder="you@university.edu" onKeyDown={e=>e.key==="Enter"&&submit()} style={inp} autoFocus/></div>
+        <div style={{marginBottom:22}}><div style={{fontSize:11,color:"#6b6560",marginBottom:5}}>Email Address</div><input value={email} onChange={e=>setEmail(e.target.value)} type="email" placeholder="you@university.edu" onKeyDown={e=>e.key==="Enter"&&submit()} style={inp} autoFocus/></div>
         {error&&<div style={{fontSize:12,color:"#ef4444",background:"rgba(239,68,68,.1)",padding:"9px 13px",borderRadius:8,marginBottom:14,border:"1px solid rgba(239,68,68,.3)"}}>{error}</div>}
         {success&&(
           <div style={{marginBottom:14}}>
             <div style={{fontSize:12,color:"#22c55e",background:"rgba(34,197,94,.1)",padding:"12px 14px",borderRadius:8,border:"1px solid rgba(34,197,94,.3)",lineHeight:1.6}}>
               {success}
             </div>
-            <div style={{fontSize:11,color:"#7a7590",marginTop:10,padding:"10px 12px",background:"#0f0f13",borderRadius:8,lineHeight:1.6}}>
+            <div style={{fontSize:11,color:"#6b6560",marginTop:10,padding:"10px 12px",background:"#f0ece3",borderRadius:10,lineHeight:1.6}}>
               💡 <strong>Tip:</strong> Check your spam folder if you do not see the email within a few minutes. The link expires in 1 hour.
             </div>
           </div>
@@ -360,22 +360,22 @@ function AuthScreen({onAuth}){
         {!success&&<button onClick={submit} disabled={loading||!email} style={{...btnPrimary,opacity:loading||!email?0.6:1}}>
           {loading?"Sending reset link...":"Send Reset Link →"}
         </button>}
-        {success&&<button onClick={()=>switchMode("login")} style={{...btnPrimary,background:"transparent",border:"1px solid #2a2a38",color:"#7a7590"}}>Back to Sign In</button>}
+        {success&&<button onClick={()=>switchMode("login")} style={{...btnPrimary,background:"transparent",border:"1px solid #2a2a38",color:"#6b6560"}}>Back to Sign In</button>}
       </div>
     </div>
   );
 
   // ── MFA challenge screen ───────────────────────────────────────────────────
   if(mode==="mfa") return(
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#0f0f13 0%,#1a1a2e 100%)",fontFamily:"'Inter',system-ui,sans-serif"}}>
-      <div style={{width:"min(92vw,420px)",padding:"clamp(24px,5vw,40px) clamp(18px,4vw,36px)",background:"#16161f",borderRadius:20,border:"1px solid #2a2a38",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#f7f5f0",fontFamily:"'DM Sans','Inter',system-ui,sans-serif"}}>
+      <div style={{width:"min(92vw,420px)",padding:"clamp(24px,5vw,40px) clamp(18px,4vw,36px)",background:"#fff",borderRadius:18,border:"1px solid rgba(0,0,0,.08)",boxShadow:"0 20px 60px rgba(0,0,0,.08)"}}>
         <div style={{textAlign:"center",marginBottom:28}}>
           <div style={{fontSize:40,marginBottom:10}}>🔐</div>
-          <div style={{fontSize:22,fontWeight:700,color:"#e8e3d8"}}>Two-Factor Authentication</div>
-          <div style={{fontSize:12,color:"#7a7590",marginTop:6,lineHeight:1.6}}>Open your authenticator app and enter the 6-digit code for ProPlan Scholar.</div>
+          <div style={{fontSize:24,color:"#0e0e14",fontFamily:"'Instrument Serif',Georgia,serif",letterSpacing:"-.5px"}}>Two-factor <em style={{color:"#c75b12",fontStyle:"italic"}}>authentication</em></div>
+          <div style={{fontSize:12,color:"#6b6560",marginTop:6,lineHeight:1.6}}>Open your authenticator app and enter the 6-digit code for ProPlan Scholar.</div>
         </div>
         <div style={{marginBottom:18}}>
-          <div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>6-digit Code</div>
+          <div style={{fontSize:11,color:"#6b6560",marginBottom:5}}>6-digit Code</div>
           <input
             value={mfaCode}
             onChange={e=>setMfaCode(e.target.value.replace(/\D/g,"").slice(0,6))}
@@ -391,9 +391,9 @@ function AuthScreen({onAuth}){
         <button onClick={submit} disabled={loading||mfaCode.length<6} style={{...btnPrimary,opacity:loading||mfaCode.length<6?0.6:1,marginBottom:10}}>
           {loading?"Verifying...":"Verify and Sign In →"}
         </button>
-        <button onClick={()=>{setMode("login");setMfaCode("");setMfaFactor(null);setMfaChallenge(null);setError("");}} style={{width:"100%",background:"transparent",border:"none",color:"#7a7590",fontSize:12,cursor:"pointer",fontFamily:"inherit",padding:"6px"}}>← Back to sign in</button>
-        <div style={{fontSize:11,color:"#7a7590",marginTop:18,textAlign:"center",lineHeight:1.6}}>
-          Lost access to your authenticator? Contact <a href="mailto:hello@proplanscholar.com" style={{color:"#a78bfa",textDecoration:"none"}}>hello@proplanscholar.com</a> for help.
+        <button onClick={()=>{setMode("login");setMfaCode("");setMfaFactor(null);setMfaChallenge(null);setError("");}} style={{width:"100%",background:"transparent",border:"none",color:"#6b6560",fontSize:12,cursor:"pointer",fontFamily:"inherit",padding:"6px"}}>← Back to sign in</button>
+        <div style={{fontSize:11,color:"#6b6560",marginTop:18,textAlign:"center",lineHeight:1.6}}>
+          Lost access to your authenticator? Contact <a href="mailto:hello@proplanscholar.com" style={{color:"#c75b12",textDecoration:"none"}}>hello@proplanscholar.com</a> for help.
         </div>
       </div>
     </div>
@@ -401,27 +401,27 @@ function AuthScreen({onAuth}){
 
   // ── Login / Signup screen ──────────────────────────────────────────────────
   return(
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#0f0f13 0%,#1a1a2e 100%)",fontFamily:"'Inter',system-ui,sans-serif"}}>
-      <div style={{width:"min(92vw,420px)",padding:"clamp(24px,5vw,40px) clamp(18px,4vw,36px)",background:"#16161f",borderRadius:20,border:"1px solid #2a2a38",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#f7f5f0",fontFamily:"'DM Sans','Inter',system-ui,sans-serif"}}>
+      <div style={{width:"min(92vw,420px)",padding:"clamp(24px,5vw,40px) clamp(18px,4vw,36px)",background:"#fff",borderRadius:18,border:"1px solid rgba(0,0,0,.08)",boxShadow:"0 20px 60px rgba(0,0,0,.08)"}}>
         <div style={{textAlign:"center",marginBottom:30}}>
           <div style={{fontSize:44,marginBottom:10}}>🎓</div>
-          <div style={{fontSize:26,fontWeight:700,color:"#e8e3d8"}}>ProPlan Scholar</div>
-          <div style={{fontSize:13,color:"#7a7590",marginTop:5}}>Your personalized academic planner</div>
+          <div style={{fontSize:32,color:"#0e0e14",fontFamily:"'Instrument Serif',Georgia,serif",letterSpacing:"-1px",lineHeight:1.1}}>ProPlan <em style={{fontStyle:"italic",color:"#c75b12"}}>Scholar</em></div>
+          <div style={{fontSize:14,color:"#6b6560",marginTop:8,fontStyle:"italic",fontFamily:"'Instrument Serif',Georgia,serif"}}>Your personalized academic planner</div>
         </div>
-        <div style={{display:"flex",background:"#0f0f13",borderRadius:10,padding:3,marginBottom:24,border:"1px solid #2a2a38"}}>
+        <div style={{display:"flex",background:"#f0ece3",borderRadius:100,padding:4,marginBottom:24,border:"1px solid rgba(0,0,0,.06)"}}>
           {["login","signup"].map(m=>(
-            <button key={m} onClick={()=>switchMode(m)} style={{flex:1,padding:"9px",borderRadius:7,border:"none",background:mode===m?"#6366f1":"transparent",color:mode===m?"#fff":"#7a7590",fontSize:13,fontWeight:mode===m?600:400,cursor:"pointer",fontFamily:"inherit",transition:"all .2s"}}>
+            <button key={m} onClick={()=>switchMode(m)} style={{flex:1,padding:"9px",borderRadius:100,border:"none",background:mode===m?"#0e0e14":"transparent",color:mode===m?"#fff":"#6b6560",fontSize:13,fontWeight:mode===m?600:400,cursor:"pointer",fontFamily:"inherit",transition:"all .2s"}}>
               {m==="login"?"Sign In":"Create Account"}
             </button>
           ))}
         </div>
-        {mode==="signup"&&<div style={{marginBottom:14}}><div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>Full Name</div><input value={name} onChange={e=>setName(e.target.value)} placeholder="Your full name" style={inp}/></div>}
-        <div style={{marginBottom:14}}><div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>Email</div><input value={email} onChange={e=>setEmail(e.target.value)} type="email" placeholder="you@university.edu" style={inp}/></div>
+        {mode==="signup"&&<div style={{marginBottom:14}}><div style={{fontSize:11,color:"#6b6560",marginBottom:5}}>Full Name</div><input value={name} onChange={e=>setName(e.target.value)} placeholder="Your full name" style={inp}/></div>}
+        <div style={{marginBottom:14}}><div style={{fontSize:11,color:"#6b6560",marginBottom:5}}>Email</div><input value={email} onChange={e=>setEmail(e.target.value)} type="email" placeholder="you@university.edu" style={inp}/></div>
         <div style={{marginBottom:mode==="login"?8:22}}>
-          <div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>Password</div>
+          <div style={{fontSize:11,color:"#6b6560",marginBottom:5}}>Password</div>
           <div style={{position:"relative"}}>
             <input value={password} onChange={e=>setPassword(e.target.value)} type={showPwd?"text":"password"} placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&submit()} style={{...inp,paddingRight:42}} autoComplete={mode==="signup"?"new-password":"current-password"}/>
-            <button type="button" onClick={()=>setShowPwd(s=>!s)} aria-label={showPwd?"Hide password":"Show password"} title={showPwd?"Hide password":"Show password"} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"transparent",border:"none",color:"#7a7590",cursor:"pointer",padding:"6px 8px",fontSize:16,lineHeight:1,fontFamily:"inherit"}}>{showPwd?"🙈":"👁"}</button>
+            <button type="button" onClick={()=>setShowPwd(s=>!s)} aria-label={showPwd?"Hide password":"Show password"} title={showPwd?"Hide password":"Show password"} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"transparent",border:"none",color:"#6b6560",cursor:"pointer",padding:"6px 10px",fontSize:16,lineHeight:1,fontFamily:"inherit"}}>{showPwd?"🙈":"👁"}</button>
           </div>
         </div>
         {/* Forgot password link — only on login */}
@@ -435,12 +435,12 @@ function AuthScreen({onAuth}){
         <button onClick={submit} disabled={loading||!email||!password} style={{...btnPrimary,opacity:loading||!email||!password?0.6:1}}>
           {loading?"Please wait...":mode==="login"?"Sign In →":"Create Account →"}
         </button>
-        {mode==="login"&&<div style={{textAlign:"center",marginTop:16,fontSize:12,color:"#7a7590"}}>No account? <span onClick={()=>switchMode("signup")} style={{color:"#6366f1",cursor:"pointer"}}>Sign up free</span></div>}
+        {mode==="login"&&<div style={{textAlign:"center",marginTop:16,fontSize:12,color:"#6b6560"}}>No account? <span onClick={()=>switchMode("signup")} style={{color:"#6366f1",cursor:"pointer"}}>Sign up free</span></div>}
         {mode==="signup"&&(
           <div>
-            <div style={{textAlign:"center",marginTop:16,fontSize:12,color:"#7a7590"}}>Already have an account? <span onClick={()=>switchMode("login")} style={{color:"#6366f1",cursor:"pointer"}}>Sign in</span></div>
+            <div style={{textAlign:"center",marginTop:16,fontSize:12,color:"#6b6560"}}>Already have an account? <span onClick={()=>switchMode("login")} style={{color:"#6366f1",cursor:"pointer"}}>Sign in</span></div>
             <div style={{marginTop:16,padding:"12px 14px",background:"rgba(255,255,255,.04)",borderRadius:9,border:"1px solid rgba(255,255,255,.1)"}}>
-              <div style={{fontSize:11,color:"#7a7590",lineHeight:1.7,textAlign:"center"}}>
+              <div style={{fontSize:11,color:"#6b6560",lineHeight:1.7,textAlign:"center"}}>
                 By creating an account you agree to our{" "}
                 <a href="/terms" target="_blank" rel="noreferrer" style={{color:"#6366f1"}}>Terms of Service</a>
                 {" "}and{" "}
@@ -474,7 +474,7 @@ function Onboarding({user,onComplete}){
   }
   const wrap=ch=>(
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#0f0f13,#1a1a2e)",fontFamily:"'Inter',system-ui,sans-serif",padding:16}}>
-      <div style={{width:"min(92vw,500px)",padding:"36px 30px",background:"#16161f",borderRadius:20,border:"1px solid #2a2a38",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
+      <div style={{width:"min(92vw,500px)",padding:"36px 30px",background:"#fff",borderRadius:18,border:"1px solid rgba(0,0,0,.08)",boxShadow:"0 20px 60px rgba(0,0,0,.08)"}}>
         <div style={{display:"flex",gap:5,justifyContent:"center",marginBottom:26}}>
           {Array.from({length:TOTAL}).map((_,i)=><div key={i} style={{width:i+1===step?20:7,height:7,borderRadius:4,background:i+1<=step?"#6366f1":"#2a2a38",transition:"all .3s"}}/>)}
         </div>
@@ -496,25 +496,25 @@ function Onboarding({user,onComplete}){
       ))}
     </div>
   );
-  const inp={width:"100%",background:"#0f0f13",border:"1px solid #2a2a38",borderRadius:8,padding:"9px 12px",color:"#e8e3d8",fontSize:14,outline:"none",fontFamily:"inherit"};
+  const inp={width:"100%",background:"#0f0f13",border:"1px solid #2a2a38",borderRadius:8,padding:"9px 12px",color:"#0e0e14",fontSize:14,outline:"none",fontFamily:"inherit"};
 
   if(step===1)return wrap(<>
     <div style={{fontSize:10,letterSpacing:3,color:"#6366f1",textTransform:"uppercase",marginBottom:8}}>Welcome</div>
-    <h2 style={{fontSize:22,fontWeight:700,color:"#e8e3d8",marginBottom:6}}>Hi {p.full_name.split(" ")[0]||"there"}! 👋</h2>
-    <p style={{fontSize:13,color:"#7a7590",lineHeight:1.7,marginBottom:20}}>Let us set up your planner. A few quick questions so we build a schedule that actually fits your life — not just your classes.</p>
-    <div style={{marginBottom:10}}><div style={{fontSize:11,color:"#7a7590",marginBottom:5}}>Your name</div><input value={p.full_name} onChange={e=>setP(x=>({...x,full_name:e.target.value}))} placeholder="Full name" style={inp}/></div>
+    <h2 style={{fontSize:22,fontWeight:700,color:"#0e0e14",marginBottom:6}}>Hi {p.full_name.split(" ")[0]||"there"}! 👋</h2>
+    <p style={{fontSize:13,color:"#6b6560",lineHeight:1.7,marginBottom:20}}>Let us set up your planner. A few quick questions so we build a schedule that actually fits your life — not just your classes.</p>
+    <div style={{marginBottom:10}}><div style={{fontSize:11,color:"#6b6560",marginBottom:5}}>Your name</div><input value={p.full_name} onChange={e=>setP(x=>({...x,full_name:e.target.value}))} placeholder="Full name" style={inp}/></div>
     {nextBtn("Let us go →",!p.full_name)}
   </>);
 
   if(step===2)return wrap(<>
     <div style={{fontSize:10,letterSpacing:3,color:"#6366f1",textTransform:"uppercase",marginBottom:8}}>Step 1 of 5</div>
-    <h2 style={{fontSize:20,fontWeight:700,color:"#e8e3d8",marginBottom:5}}>What are you studying for?</h2>
-    <p style={{fontSize:12,color:"#7a7590",marginBottom:16,lineHeight:1.6}}>This calibrates your study load and scheduling intensity.</p>
+    <h2 style={{fontSize:20,fontWeight:700,color:"#0e0e14",marginBottom:5}}>What are you studying for?</h2>
+    <p style={{fontSize:12,color:"#6b6560",marginBottom:16,lineHeight:1.6}}>This calibrates your study load and scheduling intensity.</p>
     <div style={{display:"flex",flexDirection:"column",gap:8}}>
       {DEGREE_LEVELS.map(d=>(
         <div key={d.id} onClick={()=>setP(x=>({...x,degree_level:d.id}))} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",borderRadius:10,border:`2px solid ${p.degree_level===d.id?"#6366f1":"#2a2a38"}`,background:p.degree_level===d.id?"rgba(99,102,241,.1)":"transparent",cursor:"pointer",transition:"all .2s"}}>
           <span style={{fontSize:20}}>{d.icon}</span>
-          <span style={{fontSize:14,color:"#e8e3d8",fontWeight:p.degree_level===d.id?600:400}}>{d.label}</span>
+          <span style={{fontSize:14,color:"#0e0e14",fontWeight:p.degree_level===d.id?600:400}}>{d.label}</span>
           {p.degree_level===d.id&&<span style={{marginLeft:"auto",color:"#6366f1",fontSize:16}}>✓</span>}
         </div>
       ))}
@@ -524,15 +524,15 @@ function Onboarding({user,onComplete}){
 
   if(step===3)return wrap(<>
     <div style={{fontSize:10,letterSpacing:3,color:"#6366f1",textTransform:"uppercase",marginBottom:8}}>Step 2 of 5</div>
-    <h2 style={{fontSize:20,fontWeight:700,color:"#e8e3d8",marginBottom:5}}>Your University</h2>
-    <p style={{fontSize:12,color:"#7a7590",marginBottom:14,lineHeight:1.6}}>We will theme the app in your school's official colors.</p>
+    <h2 style={{fontSize:20,fontWeight:700,color:"#0e0e14",marginBottom:5}}>Your University</h2>
+    <p style={{fontSize:12,color:"#6b6560",marginBottom:14,lineHeight:1.6}}>We will theme the app in your school's official colors.</p>
     <div style={{maxHeight:320,overflowY:"auto",display:"flex",flexDirection:"column",gap:6,paddingRight:4}}>
       {UNIVERSITIES.map(u=>(
         <div key={u.id} onClick={()=>setP(x=>({...x,university:u.id,university_abbr:u.abbr,university_primary:u.primary}))} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:9,border:`2px solid ${p.university===u.id?u.primary:"#2a2a38"}`,background:p.university===u.id?`rgba(${hexToRgb(u.primary)},.12)`:"transparent",cursor:"pointer",transition:"all .2s"}}>
           <div style={{width:26,height:26,borderRadius:6,background:u.primary,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0}}>{u.logo}</div>
           <div style={{flex:1}}>
-            <div style={{fontSize:13,color:"#e8e3d8",fontWeight:p.university===u.id?600:400}}>{u.name}</div>
-            {u.mascot&&<div style={{fontSize:10,color:"#7a7590"}}>{u.mascot}</div>}
+            <div style={{fontSize:13,color:"#0e0e14",fontWeight:p.university===u.id?600:400}}>{u.name}</div>
+            {u.mascot&&<div style={{fontSize:10,color:"#6b6560"}}>{u.mascot}</div>}
           </div>
           <div style={{display:"flex",gap:3}}>{[u.primary,u.secondary,u.accent].map((c,i)=><div key={i} style={{width:10,height:10,borderRadius:2,background:c}}/>)}</div>
         </div>
@@ -541,15 +541,15 @@ function Onboarding({user,onComplete}){
     {/* Custom school name input — shows when Other is selected */}
     {p.university==="custom"&&(
       <div style={{marginTop:12,padding:"12px 14px",background:"rgba(59,74,107,.15)",border:"1px solid rgba(59,74,107,.4)",borderRadius:10}}>
-        <div style={{fontSize:11,color:"#7a7590",marginBottom:7}}>Enter your school name:</div>
+        <div style={{fontSize:11,color:"#6b6560",marginBottom:7}}>Enter your school name:</div>
         <input
           value={p.university_name||""}
           onChange={e=>setP(x=>({...x,university_name:e.target.value}))}
           placeholder="e.g. University of Texas at San Antonio"
-          style={{width:"100%",background:"#0f0f13",border:"1px solid #2a2a38",borderRadius:8,padding:"10px 12px",color:"#e8e3d8",fontSize:14,outline:"none",fontFamily:"inherit"}}
+          style={{width:"100%",background:"#0f0f13",border:"1px solid #2a2a38",borderRadius:8,padding:"10px 12px",color:"#0e0e14",fontSize:14,outline:"none",fontFamily:"inherit"}}
           autoFocus
         />
-        <div style={{fontSize:10,color:"#7a7590",marginTop:6}}>Your app will use a standard ProPlan Scholar theme.</div>
+        <div style={{fontSize:10,color:"#6b6560",marginTop:6}}>Your app will use a standard ProPlan Scholar theme.</div>
       </div>
     )}
     {nextBtn("Continue →", p.university==="custom"&&!p.university_name)}
@@ -557,11 +557,11 @@ function Onboarding({user,onComplete}){
 
   if(step===4)return wrap(<>
     <div style={{fontSize:10,letterSpacing:3,color:"#6366f1",textTransform:"uppercase",marginBottom:8}}>Step 3 of 5</div>
-    <h2 style={{fontSize:20,fontWeight:700,color:"#e8e3d8",marginBottom:5}}>Are you a student-athlete?</h2>
-    <p style={{fontSize:12,color:"#7a7590",lineHeight:1.6}}>We will block practice and game times so study sessions never conflict.</p>
+    <h2 style={{fontSize:20,fontWeight:700,color:"#0e0e14",marginBottom:5}}>Are you a student-athlete?</h2>
+    <p style={{fontSize:12,color:"#6b6560",lineHeight:1.6}}>We will block practice and game times so study sessions never conflict.</p>
     {yesno(p.is_athlete,v=>setP(x=>({...x,is_athlete:v,sports:v?x.sports:[]})))}
     {p.is_athlete&&<>
-      <p style={{fontSize:12,color:"#7a7590",marginTop:16,marginBottom:10,fontWeight:600}}>Which sport(s)? Select all that apply:</p>
+      <p style={{fontSize:12,color:"#6b6560",marginTop:16,marginBottom:10,fontWeight:600}}>Which sport(s)? Select all that apply:</p>
       <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
         {SPORTS_LIST.map(s=>(
           <button key={s} onClick={()=>toggleSport(s)} style={{padding:"5px 11px",borderRadius:20,border:`1px solid ${p.sports.includes(s)?"#6366f1":"#2a2a38"}`,background:p.sports.includes(s)?"rgba(99,102,241,.15)":"transparent",color:p.sports.includes(s)?"#a5b4fc":"#7a7590",fontSize:12,cursor:"pointer",fontFamily:"inherit",transition:"all .2s"}}>
@@ -575,12 +575,12 @@ function Onboarding({user,onComplete}){
 
   if(step===5)return wrap(<>
     <div style={{fontSize:10,letterSpacing:3,color:"#6366f1",textTransform:"uppercase",marginBottom:8}}>Step 4 of 5</div>
-    <h2 style={{fontSize:20,fontWeight:700,color:"#e8e3d8",marginBottom:5}}>Greek Life?</h2>
-    <p style={{fontSize:12,color:"#7a7590",lineHeight:1.6}}>We will account for chapter meetings, philanthropy events, and other commitments.</p>
+    <h2 style={{fontSize:20,fontWeight:700,color:"#0e0e14",marginBottom:5}}>Greek Life?</h2>
+    <p style={{fontSize:12,color:"#6b6560",lineHeight:1.6}}>We will account for chapter meetings, philanthropy events, and other commitments.</p>
     {yesno(p.is_greek,v=>setP(x=>({...x,is_greek:v,greek_org:v?x.greek_org:""})))}
     {p.is_greek&&<>
-      <p style={{fontSize:12,color:"#7a7590",marginTop:16,marginBottom:8,fontWeight:600}}>Which organization?</p>
-      <select value={p.greek_org} onChange={e=>setP(x=>({...x,greek_org:e.target.value}))} style={{width:"100%",background:"#0f0f13",border:"1px solid #2a2a38",borderRadius:8,padding:"10px 12px",color:"#e8e3d8",fontSize:13,outline:"none",fontFamily:"inherit"}}>
+      <p style={{fontSize:12,color:"#6b6560",marginTop:16,marginBottom:8,fontWeight:600}}>Which organization?</p>
+      <select value={p.greek_org} onChange={e=>setP(x=>({...x,greek_org:e.target.value}))} style={{width:"100%",background:"#0f0f13",border:"1px solid #2a2a38",borderRadius:8,padding:"10px 12px",color:"#0e0e14",fontSize:13,outline:"none",fontFamily:"inherit"}}>
         <option value="">Select organization...</option>
         {GREEK_ORGS.map(g=><option key={g} value={g}>{g}</option>)}
       </select>
@@ -590,13 +590,13 @@ function Onboarding({user,onComplete}){
 
   if(step===6)return wrap(<>
     <div style={{fontSize:10,letterSpacing:3,color:"#6366f1",textTransform:"uppercase",marginBottom:8}}>Step 5 of 5</div>
-    <h2 style={{fontSize:20,fontWeight:700,color:"#e8e3d8",marginBottom:5}}>Working professional?</h2>
-    <p style={{fontSize:12,color:"#7a7590",lineHeight:1.6}}>We will build your work schedule day-by-day so study sessions only land in your free time.</p>
+    <h2 style={{fontSize:20,fontWeight:700,color:"#0e0e14",marginBottom:5}}>Working professional?</h2>
+    <p style={{fontSize:12,color:"#6b6560",lineHeight:1.6}}>We will build your work schedule day-by-day so study sessions only land in your free time.</p>
     {yesno(p.is_working_professional,v=>setP(x=>({...x,is_working_professional:v})))}
     {p.is_working_professional!==null&&<>
       <div style={{marginTop:20,padding:16,background:"rgba(99,102,241,.08)",borderRadius:10,border:"1px solid rgba(99,102,241,.2)"}}>
         <div style={{fontSize:13,color:"#a5b4fc",fontWeight:600,marginBottom:6}}>Almost done!</div>
-        <div style={{fontSize:12,color:"#7a7590",lineHeight:1.7}}>
+        <div style={{fontSize:12,color:"#6b6560",lineHeight:1.7}}>
           {p.is_working_professional?"After setup, configure your exact work hours day-by-day under My Schedule.":"Your schedule will be optimized around your classes and activities."}
           {p.is_athlete&&<div style={{marginTop:4}}>🏅 We will add blocks for your {p.sports.join(", ")} schedule.</div>}
           {p.is_greek&&<div style={{marginTop:4}}>🏛 We will add blocks for {p.greek_org} activities.</div>}
