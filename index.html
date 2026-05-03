@@ -18,7 +18,10 @@
     <style>
       *{box-sizing:border-box;margin:0;padding:0;}
       html,body{overflow-x:hidden;width:100%;max-width:100vw;}
-      body{font-family:'Inter','Plus Jakarta Sans',system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased;}
+      /* Pre-React paint background — matches the warm cream from the landing page so
+         there is no dark or white flash when the PWA launches or React mounts. */
+      html{background:#f7f5f0;}
+      body{font-family:'Inter','Plus Jakarta Sans',system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased;background:#f7f5f0;color:#0e0e14;}
     </style>
   </head>
   <body>
