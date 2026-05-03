@@ -738,9 +738,10 @@ export default function ProPlanScholar(){
   const T=buildTheme(profile?.university_primary||"#6366f1",dark);
   const rgb=hexToRgb(T.accent);
 
-  // ── Dynamic favicon — updates to school color ─────────────────────────────
+  // ── Dynamic favicon + browser-chrome color — updates to school color ──────
   useEffect(()=>{
     const color=profile?.university_primary||"#C75B12";
+    // 1) Re-skin the favicon SVG with the student's school color
     const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0e0e14"/><text x="32" y="50" text-anchor="middle" font-family="Georgia,serif" font-weight="bold" font-size="46" fill="${color}">P</text></svg>`;
     const blob=new Blob([svg],{type:"image/svg+xml"});
     const url=URL.createObjectURL(blob);
@@ -748,6 +749,11 @@ export default function ProPlanScholar(){
     if(!link){link=document.createElement("link");link.rel="icon";document.head.appendChild(link);}
     link.type="image/svg+xml";
     link.href=url;
+    // 2) Update <meta name="theme-color"> so the iPhone PWA status bar and
+    //    Android Chrome browser bar take on the school color too.
+    let themeMeta=document.querySelector("meta[name='theme-color']");
+    if(!themeMeta){themeMeta=document.createElement("meta");themeMeta.name="theme-color";document.head.appendChild(themeMeta);}
+    themeMeta.content=color;
     return()=>URL.revokeObjectURL(url);
   },[profile?.university_primary]);
 
@@ -1137,16 +1143,59 @@ export default function ProPlanScholar(){
   }
 
   async function saveGrade(assignmentId, courseId, score, maxScore){
+    if(score===""||score===null||isNaN(score)){notify("Please enter a score.");return;}
+    if(!maxScore||isNaN(maxScore)||maxScore<=0){notify("Max score must be greater than 0.");return;}
+    const numScore=Number(score);
+    const numMax=Number(maxScore);
     const existing=grades.find(g=>g.assignmentId===assignmentId);
-    if(existing){
-      await supabase.from("grades").update({score,max_score:maxScore}).eq("id",existing.id);
-      setGrades(p=>p.map(g=>g.id===existing.id?{...g,score,maxScore}:g));
-    } else {
-      const{data}=await supabase.from("grades").insert({user_id:authUser.id,assignment_id:assignmentId,course_id:courseId,score,max_score:maxScore}).select().single();
-      if(data)setGrades(p=>[...p,{...data,assignmentId:data.assignment_id,courseId:data.course_id,maxScore:data.max_score}]);
+    try{
+      if(existing){
+        const{error}=await supabase.from("grades").update({score:numScore,max_score:numMax}).eq("id",existing.id);
+        if(error)throw error;
+        setGrades(p=>p.map(g=>g.id===existing.id?{...g,score:numScore,maxScore:numMax}:g));
+      } else {
+        const{data,error}=await supabase.from("grades").insert({user_id:authUser.id,assignment_id:assignmentId,course_id:courseId,score:numScore,max_score:numMax}).select().single();
+        if(error)throw error;
+        if(data)setGrades(p=>[...p,{...data,assignmentId:data.assignment_id,courseId:data.course_id,maxScore:data.max_score}]);
+      }
+      setShowGradeModal(null);
+      notify("Grade saved!");
+    }catch(err){
+      console.error("saveGrade error:",err);
+      notify(`Could not save grade: ${err.message||err}. ${err.message?.includes("does not exist")?"Run SUPABASE_MIGRATION_grades.sql in Supabase first.":""}`);
     }
-    setShowGradeModal(null);
-    notify("Grade saved!");
+  }
+
+  async function deleteGrade(assignmentId){
+    const existing=grades.find(g=>g.assignmentId===assignmentId);
+    if(!existing){setShowGradeModal(null);return;}
+    if(!confirm("Remove the recorded grade for this assignment?"))return;
+    try{
+      const{error}=await supabase.from("grades").delete().eq("id",existing.id);
+      if(error)throw error;
+      setGrades(p=>p.filter(g=>g.id!==existing.id));
+      setShowGradeModal(null);
+      notify("Grade removed.");
+    }catch(err){
+      console.error("deleteGrade error:",err);
+      notify(`Could not remove grade: ${err.message||err}`);
+    }
+  }
+
+  // Helper to map a percentage to a letter grade — matches the GPA scale used by calcGPA above
+  function pctToLetter(pct){
+    if(pct>=93)return"A";
+    if(pct>=90)return"A-";
+    if(pct>=87)return"B+";
+    if(pct>=83)return"B";
+    if(pct>=80)return"B-";
+    if(pct>=77)return"C+";
+    if(pct>=73)return"C";
+    if(pct>=70)return"C-";
+    if(pct>=67)return"D+";
+    if(pct>=63)return"D";
+    if(pct>=60)return"D-";
+    return"F";
   }
 
   async function toggleDone(id){
@@ -2523,7 +2572,85 @@ Today: ${new Date().toDateString()}. Be concise, encouraging, and practical.`;
         );
       })()}
 
-      {/* ── MFA enrollment modal (TOTP setup) ─────────────────── */}
+      {/* ── Grade entry modal (📊 button on assignments) ──────── */}
+      {showGradeModal&&(()=>{
+        const a=showGradeModal;
+        const course=courses.find(c=>c.id===a.courseId);
+        const existing=grades.find(g=>g.assignmentId===a.id);
+        const score=Number(gradeInput.score);
+        const maxS=Number(gradeInput.maxScore)||100;
+        const pct=gradeInput.score!==""&&!isNaN(score)&&maxS>0?(score/maxS*100):null;
+        const letter=pct!==null?pctToLetter(pct):"";
+        const letterColor=pct===null?T.muted:pct>=90?T.success:pct>=80?"#0ea5e9":pct>=70?T.caution:pct>=60?T.warning:T.danger;
+        return(
+          <div className="syl-overlay" role="dialog" aria-label="Enter grade" onClick={()=>setShowGradeModal(null)}>
+            <div className="syl-modal" style={{maxWidth:420,textAlign:"left",padding:"22px 22px 18px"}} onClick={e=>e.stopPropagation()}>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+                <span style={{fontSize:24}}>📊</span>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:10,letterSpacing:2,color:course?.color||T.accent,textTransform:"uppercase",fontWeight:700}}>Log Grade</div>
+                  <div style={{fontWeight:700,fontSize:15,color:T.text,wordBreak:"break-word"}}>{a.title}</div>
+                  {course&&<div style={{fontSize:11,color:T.muted,marginTop:2}}>{course.name}</div>}
+                </div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:8,alignItems:"end",marginBottom:12}}>
+                <div>
+                  <div style={{fontSize:11,color:T.muted,marginBottom:5}}>Your Score</div>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.5"
+                    min="0"
+                    placeholder="87"
+                    value={gradeInput.score}
+                    onChange={e=>setGradeInput(p=>({...p,score:e.target.value}))}
+                    onKeyDown={e=>e.key==="Enter"&&saveGrade(a.id,a.courseId,gradeInput.score,gradeInput.maxScore)}
+                    className="ifield"
+                    style={{fontSize:18,textAlign:"center",fontWeight:600}}
+                    autoFocus/>
+                </div>
+                <div style={{fontSize:18,color:T.muted,fontWeight:700,paddingBottom:8}}>/</div>
+                <div>
+                  <div style={{fontSize:11,color:T.muted,marginBottom:5}}>Out of</div>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="1"
+                    min="1"
+                    placeholder="100"
+                    value={gradeInput.maxScore}
+                    onChange={e=>setGradeInput(p=>({...p,maxScore:e.target.value}))}
+                    onKeyDown={e=>e.key==="Enter"&&saveGrade(a.id,a.courseId,gradeInput.score,gradeInput.maxScore)}
+                    className="ifield"
+                    style={{fontSize:18,textAlign:"center",fontWeight:600}}/>
+                </div>
+              </div>
+              {pct!==null&&(
+                <div style={{padding:"12px 14px",background:T.subcard,borderRadius:9,border:`1px solid ${T.border2}`,marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <div>
+                    <div style={{fontSize:10,color:T.muted,letterSpacing:1,textTransform:"uppercase"}}>Percentage</div>
+                    <div style={{fontSize:22,fontWeight:700,color:letterColor}}>{pct.toFixed(1)}%</div>
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontSize:10,color:T.muted,letterSpacing:1,textTransform:"uppercase"}}>Letter</div>
+                    <div style={{fontSize:32,fontWeight:800,color:letterColor,lineHeight:1}}>{letter}</div>
+                  </div>
+                </div>
+              )}
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                <button className="bg2" style={{flex:1}} onClick={()=>setShowGradeModal(null)}>Cancel</button>
+                {existing&&<button className="del-btn" style={{padding:"10px 14px",fontSize:13}} onClick={()=>deleteGrade(a.id)}>🗑 Remove</button>}
+                <button className="bp" style={{flex:2}} onClick={()=>saveGrade(a.id,a.courseId,gradeInput.score,gradeInput.maxScore)}>{existing?"Update Grade":"Save Grade"}</button>
+              </div>
+              <div style={{fontSize:10,color:T.faint,marginTop:12,textAlign:"center"}}>
+                Track your overall and per-course GPA in the <strong>Analytics</strong> tab.
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+            {/* ── MFA enrollment modal (TOTP setup) ─────────────────── */}
       {showMfaEnroll&&(
         <div className="syl-overlay" role="dialog" aria-label="Set up two-factor authentication" onClick={cancelMfaEnroll}>
           <div className="syl-modal" style={{maxWidth:440,textAlign:"left",padding:"22px 22px 18px"}} onClick={e=>e.stopPropagation()}>
